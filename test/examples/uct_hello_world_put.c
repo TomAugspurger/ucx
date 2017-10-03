@@ -161,14 +161,14 @@ static ucs_status_t init_iface(char *dev_name, char *tl_name,
     uct_iface_config_t  *config; /* Defines interface configuration options */
     uct_iface_params_t  params;
 
-    params.tl_name  = tl_name;
-    params.dev_name = dev_name;
+    params.mode.device.tl_name  = tl_name;
+    params.mode.device.dev_name = dev_name;
     params.stats_root           = NULL;
     params.rx_headroom          = sizeof(recv_desc_t);
 
     UCS_CPU_ZERO(&params.cpu_mask);
     /* Read transport-specific interface configuration */
-    status = uct_iface_config_read(tl_name, NULL, NULL, &config);
+    status = uct_md_iface_config_read(iface_p->pd, tl_name, NULL, NULL, &config);
     CHKERR_JUMP(UCS_OK != status, "setup iface_config", error_ret);
 
     /* Open communication interface */
