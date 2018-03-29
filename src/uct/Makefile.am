@@ -232,6 +232,19 @@ libuct_la_SOURCES += \
 
 endif
 
+if HAVE_CUDAIPC
+noinst_HEADERS += \
+    cudaipc/cudaipc_copy/cudaipc_copy_md.h \
+    cudaipc/cudaipc_copy/cudaipc_copy_iface.h \
+    cudaipc/cudaipc_copy/cudaipc_copy_ep.h
+
+libuct_la_SOURCES += \
+    cudaipc/cudaipc_copy/cudaipc_copy_md.c \
+    cudaipc/cudaipc_copy/cudaipc_copy_iface.c \
+    cudaipc/cudaipc_copy/cudaipc_copy_ep.c
+
+endif
+
 if HAVE_ROCM
 noinst_HEADERS += \
     rocm/rocm_cma_md.h \

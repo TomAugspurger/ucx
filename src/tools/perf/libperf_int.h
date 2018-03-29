@@ -49,11 +49,17 @@ struct ucx_perf_context {
 
     ucs_time_t                   timing_queue[TIMING_QUEUE_SIZE];
     unsigned                     timing_queue_head;
-
+#if HAVE_CUDA
+    CUcontext                    pctx;
+    int                          ctx_set;
+    int                          dev_num;
+#endif
     union {
         struct {
             ucs_async_context_t  async;
             uct_md_h             md;
+            uct_mem_h            send_memh;
+            uct_mem_h            recv_memh;
             uct_worker_h         worker;
             uct_iface_h          iface;
             uct_peer_t           *peers;

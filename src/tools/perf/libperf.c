@@ -89,6 +89,29 @@ static ucs_time_t __find_median_quick_select(ucs_time_t arr[], int n)
     }
 }
 
+#if HAVE_CUDA
+static ucs_status_t uct_cuda_mem_alloc(void **addr, size_t length)
+{
+    CUresult    err;
+    CUdevice    device;
+    CUdeviceptr dptr;
+
+    err = cuCtxGetDevice(&device);
+    if (err != CUDA_SUCCESS) {
+        return UCS_ERR_NO_MEMORY;
+    }
+
+    err = cuMemAlloc((CUdeviceptr*) &dptr, length);
+    if (err != CUDA_SUCCESS) {
+        return UCS_ERR_NO_MEMORY;
+    }
+
+    *addr = (void *) dptr;
+
+    return UCS_OK;
+}
+#endif
+
 static ucs_status_t uct_perf_test_alloc_mem(ucx_perf_context_t *perf,
                                             ucx_perf_params_t *params)
 {
@@ -109,7 +132,43 @@ static ucs_status_t uct_perf_test_alloc_mem(ucx_perf_context_t *perf,
     flags |= UCT_MD_MEM_ACCESS_ALL;
 
     /* Allocate send buffer memory */
-    status = uct_iface_mem_alloc(perf->uct.iface, 
+#if HAVE_CUDA
+    if (perf->params.mem_type == UCT_MD_MEM_TYPE_CUDA) {
+
+        status = uct_cuda_mem_alloc((void **) &(perf->send_buffer),
+                                    buffer_size * params->thread_count);
+        if (status != UCS_OK) {
+            ucs_error("Failed allocate send buffer: %s", ucs_status_string(status));
+            goto err;
+        }
+
+        status = uct_md_mem_reg(perf->uct.md, perf->send_buffer,
+                                buffer_size * params->thread_count,
+                                UCT_MD_MEM_ACCESS_ALL, &(perf->uct.send_memh));
+        if (status != UCS_OK) {
+            ucs_error("Failed to register send buffer: %s", ucs_status_string(status));
+            goto err;
+        }
+
+        status = uct_cuda_mem_alloc((void **) &(perf->recv_buffer),
+                                    buffer_size * params->thread_count);
+        if (status != UCS_OK) {
+            ucs_error("Failed allocate recv buffer: %s", ucs_status_string(status));
+            goto err;
+        }
+
+        status = uct_md_mem_reg(perf->uct.md, perf->recv_buffer,
+                                buffer_size * params->thread_count,
+                                UCT_MD_MEM_ACCESS_ALL, &(perf->uct.recv_memh));
+        if (status != UCS_OK) {
+            ucs_error("Failed to register recv buffer: %s", ucs_status_string(status));
+            goto err;
+        }
+
+        goto cuda_alloc_done;
+    }
+#endif
+    status = uct_iface_mem_alloc(perf->uct.iface,
                                  buffer_size * params->thread_count,
                                  flags, "perftest", &perf->uct.send_mem);
     if (status != UCS_OK) {
@@ -121,7 +180,7 @@ static ucs_status_t uct_perf_test_alloc_mem(ucx_perf_context_t *perf,
     perf->send_buffer = perf->uct.send_mem.address;
 
     /* Allocate receive buffer memory */
-    status = uct_iface_mem_alloc(perf->uct.iface, 
+    status = uct_iface_mem_alloc(perf->uct.iface,
                                  buffer_size * params->thread_count,
                                  flags, "perftest", &perf->uct.recv_mem);
     if (status != UCS_OK) {
@@ -132,6 +191,9 @@ static ucs_status_t uct_perf_test_alloc_mem(ucx_perf_context_t *perf,
     ucs_assert(perf->uct.recv_mem.md == perf->uct.md);
     perf->recv_buffer = perf->uct.recv_mem.address;
 
+#if HAVE_CUDA
+ cuda_alloc_done:
+#endif
     /* Allocate IOV datatype memory */
     perf->params.msg_size_cnt = params->msg_size_cnt;
     perf->uct.iov             = malloc(sizeof(*perf->uct.iov) *
@@ -158,8 +220,23 @@ err:
 
 static void uct_perf_test_free_mem(ucx_perf_context_t *perf)
 {
+#if HAVE_CUDA
+    if (perf->params.mem_type == UCT_MD_MEM_TYPE_CUDA) {
+        CUresult cu_err = CUDA_SUCCESS;
+        cu_err = cuMemFree((CUdeviceptr) perf->send_buffer);
+        if (cu_err != CUDA_SUCCESS) {
+        }
+        cu_err = cuMemFree((CUdeviceptr) perf->recv_buffer);
+        if (cu_err != CUDA_SUCCESS) {
+        }
+        goto cuda_free_done;
+    }
+#endif
     uct_iface_mem_free(&perf->uct.send_mem);
     uct_iface_mem_free(&perf->uct.recv_mem);
+#if HAVE_CUDA
+ cuda_free_done:
+#endif
     free(perf->uct.iov);
 }
 
@@ -170,10 +247,71 @@ void ucx_perf_test_start_clock(ucx_perf_context_t *perf)
     perf->prev.time         = perf->start_time;
 }
 
+static ucs_status_t setup_cuda(ucx_perf_context_t *perf, int group_index)
+{
+    int         dev_count;
+    CUdevice    device;
+    CUresult    err;
+
+    if (perf->ctx_set) return UCS_OK;
+
+    err = cuInit(0);
+    if (CUDA_SUCCESS != err) {
+        fprintf(stderr, "error in cuInit\n");
+        exit(-1);
+    }
+    err = cuDeviceGetCount(&dev_count);
+    if (CUDA_SUCCESS != err) {
+        fprintf(stderr, "error in cuDeviceGetCount");
+        goto err;
+    }
+
+    if (dev_count < 2) {
+        fprintf(stderr, "need at least 2 devices for cuda perf\n");
+        goto err;
+    }
+
+    err = cuDeviceGet(&device, group_index);
+    if (CUDA_SUCCESS != err) {
+        fprintf(stderr, "error in cuDeviceGet\n");
+        goto err;
+    }
+    perf->dev_num = (int) device;
+
+    err = cuCtxCreate(&(perf->pctx), CU_CTX_SCHED_AUTO, device);
+    if (CUDA_SUCCESS != err) {
+        fprintf(stderr, "error in cuCtxCreate\n");
+        goto err;
+    }
+    perf->ctx_set = 1;
+
+    return UCS_OK;
+
+ err:
+    return UCS_ERR_IO_ERROR;
+}
+
+static ucs_status_t cleanup_cuda(ucx_perf_context_t *perf)
+{
+    CUresult    err;
+    if (1 == perf->ctx_set) {
+        err = cuCtxDestroy(perf->pctx);
+        if (CUDA_SUCCESS != err) {
+            fprintf(stderr, "error in cuCtxDestroy");
+            goto err;
+        }
+        perf->ctx_set = 0;
+    }
+    return UCS_OK;
+ err:
+    return UCS_ERR_IO_ERROR;
+}
+
 static void ucx_perf_test_reset(ucx_perf_context_t *perf,
                                 ucx_perf_params_t *params)
 {
     unsigned i;
+    unsigned group_size, group_index;
 
     perf->params            = *params;
     perf->start_time        = ucs_get_time();
@@ -196,6 +334,19 @@ static void ucx_perf_test_reset(ucx_perf_context_t *perf,
     for (i = 0; i < TIMING_QUEUE_SIZE; ++i) {
         perf->timing_queue[i] = 0;
     }
+
+#if HAVE_CUDA
+    if (perf->params.mem_type == UCT_MD_MEM_TYPE_CUDA) {
+        group_size = rte_call(perf, group_size);
+        group_index = rte_call(perf, group_index);
+        if (group_size == 2) {
+            if (UCS_OK != setup_cuda(perf, (int) group_index)) {
+                exit(-1);
+            }
+        }
+    }
+#endif
+
 }
 
 void ucx_perf_calc_result(ucx_perf_context_t *perf, ucx_perf_result_t *result)
@@ -367,11 +518,11 @@ static ucs_status_t uct_perf_test_check_capabilities(ucx_perf_params_t *params,
         max_iov  = attr.cap.put.max_iov;
         break;
     case UCX_PERF_CMD_GET:
-        required_flags = __get_flag(params->uct.data_layout, UCT_IFACE_FLAG_GET_SHORT,
+        required_flags = __get_flag(params->uct.data_layout, 0,
                                     UCT_IFACE_FLAG_GET_BCOPY, UCT_IFACE_FLAG_GET_ZCOPY);
         min_size = __get_max_size(params->uct.data_layout, 0, 0,
                                   attr.cap.get.min_zcopy);
-        max_size = __get_max_size(params->uct.data_layout, attr.cap.get.max_short,
+        max_size = __get_max_size(params->uct.data_layout, 0,
                                   attr.cap.get.max_bcopy, attr.cap.get.max_zcopy);
         max_iov  = attr.cap.get.max_iov;
         break;
@@ -560,10 +711,19 @@ static ucs_status_t uct_perf_test_setup_endpoints(ucx_perf_context_t *perf)
     }
 
     if (info.rkey_size > 0) {
-        status = uct_md_mkey_pack(perf->uct.md, perf->uct.recv_mem.memh, rkey_buffer);
-        if (status != UCS_OK) {
-            ucs_error("Failed to uct_rkey_pack: %s", ucs_status_string(status));
-            goto err_free;
+        if (perf->params.mem_type == UCT_MD_MEM_TYPE_CUDA) {
+            status = uct_md_mkey_pack(perf->uct.md, perf->uct.recv_memh, rkey_buffer);
+            if (status != UCS_OK) {
+                ucs_error("Failed to uct_rkey_pack: %s", ucs_status_string(status));
+                goto err_free;
+            }
+        }
+        else {
+            status = uct_md_mkey_pack(perf->uct.md, perf->uct.recv_mem.memh, rkey_buffer);
+            if (status != UCS_OK) {
+                ucs_error("Failed to uct_rkey_pack: %s", ucs_status_string(status));
+                goto err_free;
+            }
         }
     }
 
@@ -950,7 +1110,7 @@ static ucs_status_t ucp_perf_test_exchange_status(ucx_perf_context_t *perf,
                                                   ucs_status_t status)
 {
     unsigned group_size  = rte_call(perf, group_size);
-    ucs_status_t collective_status = status;
+    ucs_status_t collective_status = UCS_OK;
     struct iovec vec;
     void *req = NULL;
     unsigned i;
@@ -1218,8 +1378,6 @@ static ucs_status_t uct_perf_setup(ucx_perf_context_t *perf, ucx_perf_params_t *
     }
 
     status = uct_perf_test_check_capabilities(params, perf->uct.iface);
-    /* sync status across all processes */
-    status = ucp_perf_test_exchange_status(perf, status);
     if (status != UCS_OK) {
         goto out_iface_close;
     }
@@ -1370,6 +1528,10 @@ ucs_status_t ucx_perf_run(ucx_perf_params_t *params, ucx_perf_result_t *result)
         goto out;
     }
 
+#if HAVE_CUDA
+    perf->ctx_set = 0;
+#endif
+
     ucx_perf_test_reset(perf, params);
 
     status = ucx_perf_funcs[params->api].setup(perf, params);
@@ -1402,6 +1564,9 @@ ucs_status_t ucx_perf_run(ucx_perf_params_t *params, ucx_perf_result_t *result)
 
 out_cleanup:
     ucx_perf_funcs[params->api].cleanup(perf);
+#if HAVE_CUDA
+    cleanup_cuda(perf);
+#endif
 out_free:
     free(perf);
 out:

@@ -264,6 +264,7 @@ std::ostream& operator<<(std::ostream& os, const resource* resource);
     tcp,                     \
     mm,                      \
     cma,                     \
+    cudaipc,                 \
     knem,                    \
     rocm
 

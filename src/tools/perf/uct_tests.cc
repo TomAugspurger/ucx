@@ -156,6 +156,9 @@ public:
         uint64_t am_short_hdr;
         size_t header_size;
         ssize_t packed_len;
+#if HAVE_CUDA
+        CUresult cu_ret = CUDA_SUCCESS;
+#endif
 
         /* coverity[switch_selector_expr_is_constant] */
         switch (CMD) {
@@ -184,7 +187,23 @@ public:
         case UCX_PERF_CMD_PUT:
             if (TYPE == UCX_PERF_TEST_TYPE_PINGPONG) {
                 /* Put the control word at the latest byte of the IOV message */
-                *((psn_t*)buffer + uct_perf_get_buffer_extent(&m_perf.params) - 1) = sn;
+#if HAVE_CUDA
+                if (m_perf.params.mem_type == UCT_MD_MEM_TYPE_CUDA) {
+
+                    psn_t *dev_buf = (psn_t*) ((psn_t*)buffer + uct_perf_get_buffer_extent(&m_perf.params) - 1);
+                    psn_t tmp = sn;
+
+                    cu_ret = cuMemcpyHtoD((CUdeviceptr) dev_buf,
+                                          (void *) &tmp,
+                                          sizeof(tmp));
+                    if (CUDA_SUCCESS != cu_ret) goto cuda_error;
+                }
+                else {
+#endif
+                    *((psn_t*)buffer + uct_perf_get_buffer_extent(&m_perf.params) - 1) = sn;
+#if HAVE_CUDA
+                }
+#endif
             }
             /* coverity[switch_selector_expr_is_constant] */
             switch (DATA) {
@@ -252,6 +271,10 @@ public:
         default:
             return UCS_ERR_INVALID_PARAM;
         }
+#if HAVE_CUDA
+    cuda_error:
+        return UCS_ERR_IO_ERROR;
+#endif
     }
 
     void UCS_F_ALWAYS_INLINE
@@ -290,6 +313,9 @@ public:
         uct_rkey_t rkey;
         void *buffer;
         size_t length;
+#if HAVE_CUDA
+        CUresult cu_ret;
+#endif
 
         length = ucx_perf_get_message_size(&m_perf.params);
         ucs_assert(length >= sizeof(psn_t));
@@ -310,8 +336,20 @@ public:
         }
 
         uct_perf_test_prepare_iov_buffer();
-
-        *recv_sn  = -1;
+#if HAVE_CUDA
+        if (m_perf.params.mem_type == UCT_MD_MEM_TYPE_CUDA) {
+            psn_t tmp = -1;
+            cu_ret = cuMemcpyHtoD((CUdeviceptr) recv_sn,
+                                  (void *) &tmp,
+                                  sizeof(tmp));
+            if (CUDA_SUCCESS != cu_ret) goto cuda_error;
+        }
+        else {
+#endif
+            *recv_sn  = -1;
+#if HAVE_CUDA
+        }
+#endif
         rte_call(&m_perf, barrier);
 
         my_index = rte_call(&m_perf, group_index);
@@ -329,25 +367,68 @@ public:
                 send_b(ep, send_sn, send_sn - 1, buffer, length, remote_addr,
                        rkey, NULL);
                 ucx_perf_update(&m_perf, 1, length);
-                while (*recv_sn != send_sn) {
-                    progress_responder();
+#if HAVE_CUDA
+                if (m_perf.params.mem_type == UCT_MD_MEM_TYPE_CUDA) {
+                    while (1) {
+                        psn_t tmp;
+                        cu_ret = cuMemcpyDtoH((void *) &tmp,
+                                              (CUdeviceptr) recv_sn,
+                                              sizeof(tmp));
+                        if (CUDA_SUCCESS != cu_ret) goto cuda_error;
+                        if (tmp == send_sn) break;
+                        progress_responder();
+                    }
+                    ++send_sn;
                 }
-                ++send_sn;
+                else {
+#endif
+                    while (*recv_sn != send_sn) {
+                        progress_responder();
+                    }
+                    ++send_sn;
+#if HAVE_CUDA
+                }
+#endif
             }
         } else if (my_index == 1) {
             UCX_PERF_TEST_FOREACH(&m_perf) {
-                while (*recv_sn != send_sn) {
-                    progress_responder();
+#if HAVE_CUDA
+                if (m_perf.params.mem_type == UCT_MD_MEM_TYPE_CUDA) {
+                    while(1) {
+                        psn_t tmp;
+                        cu_ret = cuMemcpyDtoH((void *) &tmp,
+                                              (CUdeviceptr) recv_sn,
+                                              sizeof(tmp));
+                        if (CUDA_SUCCESS != cu_ret) goto cuda_error;
+                        if (tmp == send_sn) break;
+                        progress_responder();
+                    }
+                    send_b(ep, send_sn, send_sn - 1, buffer, length, remote_addr,
+                           rkey, NULL);
+                    ucx_perf_update(&m_perf, 1, length);
+                    ++send_sn;
                 }
-                send_b(ep, send_sn, send_sn - 1, buffer, length, remote_addr,
-                       rkey, NULL);
-                ucx_perf_update(&m_perf, 1, length);
-                ++send_sn;
+                else {
+#endif
+                    while (*recv_sn != send_sn) {
+                        progress_responder();
+                    }
+                    send_b(ep, send_sn, send_sn - 1, buffer, length, remote_addr,
+                           rkey, NULL);
+                    ucx_perf_update(&m_perf, 1, length);
+                    ++send_sn;
+#if HAVE_CUDA
+                }
+#endif
             }
         }
 
         uct_perf_iface_flush_b(&m_perf);
         return UCS_OK;
+#if HAVE_CUDA
+    cuda_error:
+        return UCS_ERR_IO_ERROR;
+#endif
     }
 
     ucs_status_t run_stream_req_uni(bool flow_control, bool send_window,
@@ -362,13 +443,28 @@ public:
         unsigned my_index;
         unsigned length;
         uct_ep_h ep;
+#if HAVE_CUDA
+        CUresult cu_ret;
+#endif
 
         length = ucx_perf_get_message_size(&m_perf.params);
         ucs_assert(length >= sizeof(psn_t));
         ucs_assert(m_perf.params.uct.fc_window <= ((psn_t)-1) / 2);
 
-        memset(m_perf.send_buffer, 0, length);
-        memset(m_perf.recv_buffer, 0, length);
+#if HAVE_CUDA
+        if (m_perf.params.mem_type == UCT_MD_MEM_TYPE_CUDA) {
+            cu_ret = cuMemsetD8((CUdeviceptr) m_perf.send_buffer, 0, length);
+            if (CUDA_SUCCESS != cu_ret) goto cuda_error;
+            cu_ret = cuMemsetD8((CUdeviceptr)m_perf.recv_buffer, 0, length);
+            if (CUDA_SUCCESS != cu_ret) goto cuda_error;
+        }
+        else {
+#endif
+            memset(m_perf.send_buffer, 0, length);
+            memset(m_perf.recv_buffer, 0, length);
+#if HAVE_CUDA
+        }
+#endif
 
         uct_perf_test_prepare_iov_buffer();
 
@@ -393,7 +489,19 @@ public:
             } else{
                 send_sn     = 0; /* Remote buffer will remain 0 throughout the test */
             }
-            *(psn_t*)buffer = send_sn;
+
+#if HAVE_CUDA
+            if (m_perf.params.mem_type == UCT_MD_MEM_TYPE_CUDA) {
+                cu_ret = cuMemcpyHtoD((CUdeviceptr) buffer, (void *) &send_sn,
+                                      sizeof(send_sn));
+                if (CUDA_SUCCESS != cu_ret) goto cuda_error;
+            }
+            else {
+#endif
+                *(psn_t*)buffer = send_sn;
+#if HAVE_CUDA
+            }
+#endif
 
             UCX_PERF_TEST_FOREACH(&m_perf) {
                 if (flow_control) {
@@ -425,11 +533,36 @@ public:
                 /* Send "sentinel" value */
                 if (direction_to_responder) {
                     wait_for_window(send_window);
+#if HAVE_CUDA
+            if (m_perf.params.mem_type == UCT_MD_MEM_TYPE_CUDA) {
+                psn_t tmp = 2;
+                cu_ret = cuMemcpyHtoD((CUdeviceptr) buffer, (void *) &tmp,
+                                      sizeof(tmp));
+                if (CUDA_SUCCESS != cu_ret) goto cuda_error;
+            }
+            else {
+#endif
                     *(psn_t*)buffer = 2;
+#if HAVE_CUDA
+            }
+#endif
                     send_b(ep, 2, send_sn, buffer, length, remote_addr, rkey,
                            &m_completion);
                 } else {
-                    *(psn_t*)m_perf.recv_buffer = 2;
+#if HAVE_CUDA
+            if (m_perf.params.mem_type == UCT_MD_MEM_TYPE_CUDA) {
+                psn_t tmp = 2;
+                cu_ret = cuMemcpyHtoD((CUdeviceptr) m_perf.recv_buffer,
+                                      (void *) &tmp,
+                                      sizeof(tmp));
+                if (CUDA_SUCCESS != cu_ret) goto cuda_error;
+            }
+            else {
+#endif
+                        *(psn_t*)m_perf.recv_buffer = 2;
+#if HAVE_CUDA
+            }
+#endif
                 }
             } else {
                 /* Wait for last ACK, to make sure no more messages will arrive. */
@@ -470,17 +603,41 @@ public:
             } else {
                 /* Wait for "sentinel" value */
                 ucs_time_t poll_time = ucs_get_time();
-                while (*recv_sn != 2) {
-                    progress_responder();
-                    if (!direction_to_responder) {
-                        if (ucs_get_time() > poll_time + ucs_time_from_msec(1.0)) {
-                            wait_for_window(send_window);
-                            send_b(ep, 0, 0, buffer, length, remote_addr, rkey,
-                                   &m_completion);
-                            poll_time = ucs_get_time();
+#if HAVE_CUDA
+                if (m_perf.params.mem_type == UCT_MD_MEM_TYPE_CUDA) {
+                    while (1) {
+                        psn_t tmp = 2;
+                        cu_ret = cuMemcpyDtoH((void *) &tmp,
+                                              (CUdeviceptr) recv_sn,
+                                              sizeof(tmp));
+                        if (2 == tmp) break;
+                        progress_responder();
+                        if (!direction_to_responder) {
+                            if (ucs_get_time() > poll_time + ucs_time_from_msec(1.0)) {
+                                wait_for_window(send_window);
+                                send_b(ep, 0, 0, buffer, length, remote_addr, rkey,
+                                       &m_completion);
+                                poll_time = ucs_get_time();
+                            }
                         }
                     }
                 }
+                else {
+#endif
+                    while (*recv_sn != 2) {
+                        progress_responder();
+                        if (!direction_to_responder) {
+                            if (ucs_get_time() > poll_time + ucs_time_from_msec(1.0)) {
+                                wait_for_window(send_window);
+                                send_b(ep, 0, 0, buffer, length, remote_addr, rkey,
+                                       &m_completion);
+                                poll_time = ucs_get_time();
+                            }
+                        }
+                    }
+#if HAVE_CUDA
+                }
+#endif
             }
         }
 
@@ -489,8 +646,12 @@ public:
         if (my_index == 1) {
             ucx_perf_update(&m_perf, 0, 0);
         }
-
         return UCS_OK;
+
+#if HAVE_CUDA
+    cuda_error:
+        return UCS_ERR_IO_ERROR;
+#endif
     }
 
     ucs_status_t run()
