@@ -126,7 +126,7 @@ static UCS_F_ALWAYS_INLINE unsigned
 uct_cuda_ipc_progress_event_queue(ucs_queue_head_t *event_queue, unsigned max_events)
 {
     unsigned                  count = 0;
-    CUresult                  cu_ret = CUDA_SUCCESS;
+    CUresult                  cu_ret;
     uct_cuda_ipc_event_desc_t *cuda_ipc_event;
     ucs_queue_iter_t          iter;
 

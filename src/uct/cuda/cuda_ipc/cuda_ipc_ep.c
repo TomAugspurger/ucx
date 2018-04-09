@@ -16,6 +16,7 @@
 
 SGLIB_DEFINE_LIST_FUNCTIONS(uct_cuda_ipc_rem_seg_t,
                             uct_cuda_ipc_rem_seg_compare, next)
+
 SGLIB_DEFINE_HASHED_CONTAINER_FUNCTIONS(uct_cuda_ipc_rem_seg_t,
                                         UCT_CUDA_IPC_HASH_SIZE,
                                         uct_cuda_ipc_rem_seg_hash)
@@ -36,8 +37,8 @@ static UCS_CLASS_INIT_FUNC(uct_cuda_ipc_ep_t, uct_iface_t *tl_iface,
 
 static UCS_CLASS_CLEANUP_FUNC(uct_cuda_ipc_ep_t)
 {
-    uct_cuda_ipc_rem_seg_t *remote_seg;
-    CUresult               cu_ret;
+    uct_cuda_ipc_rem_seg_t                              *remote_seg;
+    CUresult                                            cu_ret;
     struct sglib_hashed_uct_cuda_ipc_rem_seg_t_iterator iter;
 
     for (remote_seg = sglib_hashed_uct_cuda_ipc_rem_seg_t_it_init(&iter, self->rem_segments_hash);
@@ -78,7 +79,7 @@ void *uct_cuda_ipc_ep_attach_rem_seg(uct_cuda_ipc_ep_t *ep,
 {
     uct_cuda_ipc_rem_seg_t *rem_seg, search;
     CUdevice               cu_device;
-    CUresult               cu_ret = CUDA_SUCCESS;
+    CUresult               cu_ret;
 
     cu_ret = cuCtxGetDevice(&cu_device);
     if (cu_ret != CUDA_SUCCESS) {
@@ -123,7 +124,7 @@ uct_cuda_ipc_post_cuda_async_copy(uct_ep_h tl_ep, void *dst, void *src,
 {
     uct_cuda_ipc_iface_t      *iface;
     uct_cuda_ipc_event_desc_t *cuda_ipc_event;
-    CUresult                  cu_ret = CUDA_SUCCESS;
+    CUresult                  cu_ret;
 
     iface = ucs_derived_of(tl_ep->iface, uct_cuda_ipc_iface_t);
 
@@ -168,8 +169,8 @@ ucs_status_t uct_cuda_ipc_ep_get_zcopy(uct_ep_h tl_ep, const uct_iov_t *iov, siz
     uct_cuda_ipc_key_t   *key   = (uct_cuda_ipc_key_t *) rkey;
     ucs_status_t         status = UCS_OK;
     CUdevice             cu_device;
-    CUresult             cu_ret = CUDA_SUCCESS;
-    CUresult             cu_err = CUDA_SUCCESS;
+    CUresult             cu_ret;
+    CUresult             cu_err;
     int                  offset = 0;
     void                 *mapped_rem_addr      = NULL;
     void                 *mapped_rem_base_addr = NULL;
@@ -258,8 +259,8 @@ ucs_status_t uct_cuda_ipc_ep_put_zcopy(uct_ep_h tl_ep, const uct_iov_t *iov, siz
     uct_cuda_ipc_key_t   *key   = (uct_cuda_ipc_key_t *) rkey;
     ucs_status_t         status = UCS_OK;
     CUdevice             cu_device;
-    CUresult             cu_ret = CUDA_SUCCESS;
-    CUresult             cu_err = CUDA_SUCCESS;
+    CUresult             cu_ret;
+    CUresult             cu_err;
     int                  offset = 0;
     void                 *mapped_rem_addr      = NULL;
     void                 *mapped_rem_base_addr = NULL;

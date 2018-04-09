@@ -66,7 +66,7 @@ static ucs_status_t uct_cuda_ipc_rkey_unpack(uct_md_component_t *mdc,
     uct_cuda_ipc_key_t *packed = (uct_cuda_ipc_key_t *) rkey_buffer;
     uct_cuda_ipc_key_t *key;
     CUdevice           cu_device;
-    CUresult           cu_ret = CUDA_SUCCESS;
+    CUresult           cu_ret;
 
     cu_ret = cuCtxGetDevice(&cu_device);
     if (cu_ret != CUDA_SUCCESS) {
