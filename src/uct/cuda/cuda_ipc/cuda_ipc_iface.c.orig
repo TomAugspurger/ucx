@@ -111,7 +111,9 @@ static ucs_status_t uct_cuda_ipc_iface_flush(uct_iface_h tl_iface, unsigned flag
         return UCS_ERR_UNSUPPORTED;
     }
 
-    if (ucs_queue_is_empty(&iface->outstanding_d2d_event_q)) {
+    if (ucs_queue_is_empty(&iface->outstanding_d2d_event_q) &&
+        ucs_queue_is_empty(&iface->outstanding_h2d_event_q) &&
+        ucs_queue_is_empty(&iface->outstanding_d2h_event_q)) {
         UCT_TL_IFACE_STAT_FLUSH(ucs_derived_of(tl_iface, uct_base_iface_t));
         return UCS_OK;
     }
@@ -154,6 +156,10 @@ static unsigned uct_cuda_ipc_iface_progress(uct_iface_h tl_iface)
     unsigned             count;
 
     count =  uct_cuda_ipc_progress_event_queue(&iface->outstanding_d2d_event_q,
+                                              max_events);
+    count += uct_cuda_ipc_progress_event_queue(&iface->outstanding_d2h_event_q,
+                                              max_events);
+    count += uct_cuda_ipc_progress_event_queue(&iface->outstanding_h2d_event_q,
                                               max_events);
     return count;
 }
@@ -214,6 +220,22 @@ ucs_status_t uct_cuda_ipc_iface_init_streams(uct_cuda_ipc_iface_t *iface)
         if (cu_ret != CUDA_SUCCESS) {
             cuGetErrorString(cu_ret, &cu_err_str);
             ucs_error("cuStreamCreate d2d (lane %d) error; ret:%s", i,
+                      cu_err_str);
+            return UCS_ERR_IO_ERROR;
+        }
+        cu_ret = cuStreamCreate(&iface->stream_d2h[i], CU_STREAM_NON_BLOCKING);
+
+        if (cu_ret != CUDA_SUCCESS) {
+            cuGetErrorString(cu_ret, &cu_err_str);
+            ucs_error("cuStreamCreate d2h (lane %d) error; ret:%s", i,
+                      cu_err_str);
+            return UCS_ERR_IO_ERROR;
+        }
+        cu_ret = cuStreamCreate(&iface->stream_h2d[i], CU_STREAM_NON_BLOCKING);
+
+        if (cu_ret != CUDA_SUCCESS) {
+            cuGetErrorString(cu_ret, &cu_err_str);
+            ucs_error("cuStreamCreate h2d (lane %d) error; ret:%s", i,
                       cu_err_str);
             return UCS_ERR_IO_ERROR;
         }
@@ -302,6 +324,8 @@ static UCS_CLASS_INIT_FUNC(uct_cuda_ipc_iface_t, uct_md_h md, uct_worker_h worke
     self->streams_initialized = 0;
 
     ucs_queue_head_init(&self->outstanding_d2d_event_q);
+    ucs_queue_head_init(&self->outstanding_h2d_event_q);
+    ucs_queue_head_init(&self->outstanding_d2h_event_q);
 
     return UCS_OK;
  err:
@@ -320,6 +344,20 @@ static UCS_CLASS_CLEANUP_FUNC(uct_cuda_ipc_iface_t)
             if (cu_ret != CUDA_SUCCESS) {
                 cuGetErrorString(cu_ret, &cu_err_str);
                 ucs_error("cuStreamDestroy d2d (lane %d) error; ret:%s", i,
+                          cu_err_str);
+            }
+            cu_ret = cuStreamDestroy(self->stream_d2h[i]);
+
+            if (cu_ret != CUDA_SUCCESS) {
+                cuGetErrorString(cu_ret, &cu_err_str);
+                ucs_error("cuStreamDestroy d2h (lane %d) error; ret:%s", i,
+                          cu_err_str);
+            }
+            cu_ret = cuStreamDestroy(self->stream_h2d[i]);
+
+            if (cu_ret != CUDA_SUCCESS) {
+                cuGetErrorString(cu_ret, &cu_err_str);
+                ucs_error("cuStreamDestroy h2d (lane %d) error; ret:%s", i,
                           cu_err_str);
             }
         }
