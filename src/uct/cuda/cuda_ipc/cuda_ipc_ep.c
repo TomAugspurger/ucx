@@ -122,11 +122,9 @@ uct_cuda_ipc_post_cuda_async_copy(uct_ep_h tl_ep, void *dst, void *src,
                                   ucs_queue_head_t *outstanding_queue,
                                   uct_completion_t *comp)
 {
-    uct_cuda_ipc_iface_t      *iface;
+    uct_cuda_ipc_iface_t      *iface = ucs_derived_of(tl_ep->iface, uct_cuda_ipc_iface_t);
     uct_cuda_ipc_event_desc_t *cuda_ipc_event;
     CUresult                  cu_ret;
-
-    iface = ucs_derived_of(tl_ep->iface, uct_cuda_ipc_iface_t);
 
     if (!length) {
         return UCS_OK;
@@ -167,6 +165,7 @@ ucs_status_t uct_cuda_ipc_ep_get_zcopy(uct_ep_h tl_ep, const uct_iov_t *iov, siz
     uct_cuda_ipc_iface_t *iface = ucs_derived_of(tl_ep->iface,
                                                  uct_cuda_ipc_iface_t);
     uct_cuda_ipc_key_t   *key   = (uct_cuda_ipc_key_t *) rkey;
+    uct_cuda_ipc_ep_t    *ep = ucs_derived_of(tl_ep, uct_cuda_ipc_ep_t);
     ucs_status_t         status = UCS_OK;
     CUdevice             cu_device;
     CUresult             cu_ret;
@@ -177,7 +176,6 @@ ucs_status_t uct_cuda_ipc_ep_get_zcopy(uct_ep_h tl_ep, const uct_iov_t *iov, siz
     CUcontext            local_ptr_ctx;
     CUcontext            remote_ptr_ctx;
     CUpointer_attribute  attribute;
-    uct_cuda_ipc_ep_t    *ep = ucs_derived_of(tl_ep, uct_cuda_ipc_ep_t);
 
     UCT_CUDA_IPC_ZERO_LENGTH_POST(iov[0].length);
 
@@ -189,7 +187,6 @@ ucs_status_t uct_cuda_ipc_ep_get_zcopy(uct_ep_h tl_ep, const uct_iov_t *iov, siz
     }
 
     if (key->dev_num == (int) cu_device) {
-
         attribute = CU_POINTER_ATTRIBUTE_CONTEXT;
         cu_ret = cuPointerGetAttribute((void *) &remote_ptr_ctx, attribute,
                                        (CUdeviceptr) remote_addr);
@@ -197,8 +194,7 @@ ucs_status_t uct_cuda_ipc_ep_get_zcopy(uct_ep_h tl_ep, const uct_iov_t *iov, siz
             /* context belongs to another process that uses the same
                device */
             cu_err = cu_ret;
-        }
-        else if (cu_ret != CUDA_SUCCESS) {
+        } else if (cu_ret != CUDA_SUCCESS) {
             cuGetErrorString(cu_ret, &cu_err_str);
             ucs_error("cuPointerGetAttribute failed ret:%s", cu_err_str);
             goto err;
@@ -257,6 +253,7 @@ ucs_status_t uct_cuda_ipc_ep_put_zcopy(uct_ep_h tl_ep, const uct_iov_t *iov, siz
     uct_cuda_ipc_iface_t *iface = ucs_derived_of(tl_ep->iface,
                                                  uct_cuda_ipc_iface_t);
     uct_cuda_ipc_key_t   *key   = (uct_cuda_ipc_key_t *) rkey;
+    uct_cuda_ipc_ep_t    *ep = ucs_derived_of(tl_ep, uct_cuda_ipc_ep_t);
     ucs_status_t         status = UCS_OK;
     CUdevice             cu_device;
     CUresult             cu_ret;
@@ -267,7 +264,6 @@ ucs_status_t uct_cuda_ipc_ep_put_zcopy(uct_ep_h tl_ep, const uct_iov_t *iov, siz
     CUcontext            local_ptr_ctx;
     CUcontext            remote_ptr_ctx;
     CUpointer_attribute  attribute;
-    uct_cuda_ipc_ep_t    *ep = ucs_derived_of(tl_ep, uct_cuda_ipc_ep_t);
 
     UCT_CUDA_IPC_ZERO_LENGTH_POST(iov[0].length);
 
@@ -279,7 +275,6 @@ ucs_status_t uct_cuda_ipc_ep_put_zcopy(uct_ep_h tl_ep, const uct_iov_t *iov, siz
     }
 
     if (key->dev_num == (int) cu_device) {
-
         attribute = CU_POINTER_ATTRIBUTE_CONTEXT;
         cu_ret = cuPointerGetAttribute((void *) &remote_ptr_ctx, attribute,
                                        (CUdeviceptr) remote_addr);
@@ -287,8 +282,7 @@ ucs_status_t uct_cuda_ipc_ep_put_zcopy(uct_ep_h tl_ep, const uct_iov_t *iov, siz
             /* context belongs to another process that uses the same
                device */
             cu_err = cu_ret;
-        }
-        else if (cu_ret != CUDA_SUCCESS) {
+        } else if (cu_ret != CUDA_SUCCESS) {
             cuGetErrorString(cu_ret, &cu_err_str);
             ucs_error("cuPointerGetAttribute failed ret:%s", cu_err_str);
             goto err;
