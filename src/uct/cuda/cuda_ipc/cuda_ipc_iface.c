@@ -238,7 +238,7 @@ static UCS_CLASS_INIT_FUNC(uct_cuda_ipc_iface_t, uct_md_h md, uct_worker_h worke
     ucs_status_t status;
     CUresult     cu_ret;
     int          dev_count;
-    int          i, j;
+    int          i = 0, j = 0;
 
     config = ucs_derived_of(tl_config, uct_cuda_ipc_iface_config_t);
 

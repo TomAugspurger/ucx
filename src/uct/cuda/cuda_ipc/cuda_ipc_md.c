@@ -66,7 +66,6 @@ static ucs_status_t uct_cuda_ipc_rkey_unpack(uct_md_component_t *mdc,
     uct_cuda_ipc_key_t *packed = (uct_cuda_ipc_key_t *) rkey_buffer;
     uct_cuda_ipc_key_t *key;
     CUdevice           cu_device;
-    CUresult           cu_ret;
 
     UCT_CUDA_IPC_GET_DEVICE(cu_device);
 
@@ -81,8 +80,6 @@ static ucs_status_t uct_cuda_ipc_rkey_unpack(uct_md_component_t *mdc,
     *rkey_p   = (uintptr_t) key;
 
     return UCS_OK;
- err:
-    return UCS_ERR_IO_ERROR;
 }
 
 static ucs_status_t uct_cuda_ipc_rkey_release(uct_md_component_t *mdc, uct_rkey_t rkey,

@@ -11,6 +11,7 @@
 
 #include <uct/base/uct_md.h>
 #include <uct/cuda/base/cuda_md.h>
+#include <uct/cuda/base/cuda_iface.h>
 #include <cuda.h>
 
 #define UCT_CUDA_IPC_MD_NAME      "cuda_ipc"
@@ -62,13 +63,11 @@ typedef struct uct_cuda_ipc_key {
 } uct_cuda_ipc_key_t;
 
 #define UCT_CUDA_IPC_GET_DEVICE(cu_device)                              \
-   do {                                                                 \
-       cu_ret = cuCtxGetDevice(&cu_device);                             \
-       if (cu_ret != CUDA_SUCCESS) {                                    \
-           cuGetErrorString(cu_ret, &cu_err_str);                       \
-           ucs_error("cuCtxGetDevice failed ret:%s", cu_err_str);       \
-           goto err;                                                    \
-       }                                                                \
-   } while(0);
+    do {                                                                \
+        ucs_status_t status = UCT_CUDADRV_FUNC(cuCtxGetDevice(&cu_device)); \
+        if (UCS_OK != status) {                                         \
+            return UCS_ERR_IO_ERROR;                                    \
+        }                                                               \
+    } while(0);
 
 #endif

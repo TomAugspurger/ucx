@@ -220,7 +220,6 @@ ucs_status_t uct_cuda_ipc_ep_get_zcopy(uct_ep_h tl_ep, const uct_iov_t *iov, siz
     uct_cuda_ipc_ep_t    *ep = ucs_derived_of(tl_ep, uct_cuda_ipc_ep_t);
     ucs_status_t         status = UCS_OK;
     CUdevice             cu_device;
-    CUresult             cu_ret;
     void                 *mapped_rem_addr      = NULL;
 
     UCT_CUDA_IPC_ZERO_LENGTH_POST(iov[0].length);
@@ -238,8 +237,6 @@ ucs_status_t uct_cuda_ipc_ep_get_zcopy(uct_ep_h tl_ep, const uct_iov_t *iov, siz
     uct_cuda_ipc_trace_data(remote_addr, rkey, "GET_ZCOPY [length %zu]",
                             uct_iov_total_length(iov, iovcnt));
     return status;
- err:
-    return UCS_ERR_IO_ERROR;
 }
 
 ucs_status_t uct_cuda_ipc_ep_put_zcopy(uct_ep_h tl_ep, const uct_iov_t *iov, size_t iovcnt,
@@ -252,7 +249,6 @@ ucs_status_t uct_cuda_ipc_ep_put_zcopy(uct_ep_h tl_ep, const uct_iov_t *iov, siz
     uct_cuda_ipc_ep_t    *ep = ucs_derived_of(tl_ep, uct_cuda_ipc_ep_t);
     ucs_status_t         status = UCS_OK;
     CUdevice             cu_device;
-    CUresult             cu_ret;
     void                 *mapped_rem_addr      = NULL;
 
     UCT_CUDA_IPC_ZERO_LENGTH_POST(iov[0].length);
@@ -270,6 +266,4 @@ ucs_status_t uct_cuda_ipc_ep_put_zcopy(uct_ep_h tl_ep, const uct_iov_t *iov, siz
     uct_cuda_ipc_trace_data(remote_addr, rkey, "PUT_ZCOPY [length %zu]",
                                 uct_iov_total_length(iov, iovcnt));
     return status;
- err:
-    return UCS_ERR_IO_ERROR;
 }
