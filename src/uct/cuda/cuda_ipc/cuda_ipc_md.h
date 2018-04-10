@@ -14,12 +14,17 @@
 #include <uct/cuda/base/cuda_iface.h>
 #include <cuda.h>
 
+
 #define UCT_CUDA_IPC_MD_NAME      "cuda_ipc"
 #define CUDA_ERR_STRLEN           512
 #define UCT_CUDA_IPC_MAX_ALLOC_SZ (1 << 24)
 
+
 extern uct_md_component_t uct_cuda_ipc_md_component;
+
+
 const char                *cu_err_str;
+
 
 /**
  * @brief cuda ipc MD descriptor
@@ -29,6 +34,7 @@ typedef struct uct_cuda_ipc_md {
     uct_linear_growth_t reg_cost; /* Memory registration cost */
 } uct_cuda_ipc_md_t;
 
+
 /**
  * @brief cuda ipc domain configuration.
  */
@@ -37,6 +43,7 @@ typedef struct uct_cuda_ipc_md_config {
     uct_linear_growth_t uc_reg_cost;  /* Memory registration cost estimation
                                          without using the cache */
 } uct_cuda_ipc_md_config_t;
+
 
 /**
  * @brief cuda_ipc memory handle
@@ -50,6 +57,7 @@ typedef struct uct_cuda_ipc_mem {
     size_t         reg_size;   /* Size of mapping */
 } uct_cuda_ipc_mem_t;
 
+
 /**
  * @brief cuda_ipc packed and remote key for put/get
  */
@@ -61,6 +69,7 @@ typedef struct uct_cuda_ipc_key {
     CUdeviceptr    d_mapped_ptr; /* Mapped GPU address */
     int            dev_num;      /* GPU Device number */
 } uct_cuda_ipc_key_t;
+
 
 #define UCT_CUDA_IPC_GET_DEVICE(cu_device)                              \
     do {                                                                \

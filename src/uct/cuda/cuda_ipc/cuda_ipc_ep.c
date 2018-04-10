@@ -29,7 +29,6 @@ static UCS_CLASS_INIT_FUNC(uct_cuda_ipc_ep_t, uct_iface_t *tl_iface,
     uct_cuda_ipc_iface_t *iface = ucs_derived_of(tl_iface, uct_cuda_ipc_iface_t);
 
     UCS_CLASS_CALL_SUPER_INIT(uct_base_ep_t, &iface->super);
-
     sglib_hashed_uct_cuda_ipc_rem_seg_t_init(self->rem_segments_hash);
 
     return UCS_OK;
@@ -87,7 +86,6 @@ void *uct_cuda_ipc_ep_attach_rem_seg(uct_cuda_ipc_ep_t *ep,
         if (rem_seg == NULL) {
             ucs_fatal("Failed to allocated memory for a remote segment. %m");
         }
-
         rem_seg->ph      = rkey->ph;
         rem_seg->dev_num = rkey->dev_num;
         /* Attach memory to own GPU address space */
@@ -98,12 +96,10 @@ void *uct_cuda_ipc_ep_attach_rem_seg(uct_cuda_ipc_ep_t *ep,
             ucs_fatal("cuIpcOpenMemHandle failed");
         }
         rem_seg->b_len = rkey->b_rem_len;
-
         /* put the base address into the ep's hash table */
         sglib_hashed_uct_cuda_ipc_rem_seg_t_add(ep->rem_segments_hash,
                                                 rem_seg);
     }
-
     return (void *) rem_seg->d_bptr;
 }
 
@@ -131,7 +127,6 @@ void *uct_cuda_ipc_ep_attach_rem_seg(uct_cuda_ipc_ep_t *ep,
                 ucs_error("cuPointerGetAttribute failed ret:%s", cu_err_str); \
                 return UCS_ERR_IO_ERROR;                                \
             }                                                           \
-                                                                        \
             /* assumes iov is uniformly on device or not */             \
             cu_ret = cuPointerGetAttribute((void *) &local_ptr_ctx, attribute, \
                                            (CUdeviceptr) iov[0].buffer); \
@@ -141,7 +136,6 @@ void *uct_cuda_ipc_ep_attach_rem_seg(uct_cuda_ipc_ep_t *ep,
                 return UCS_ERR_IO_ERROR;                                \
             }                                                           \
         }                                                               \
-                                                                        \
         if ((CUDA_SUCCESS == cu_err) && (key->dev_num == (int) cu_device) && \
             (local_ptr_ctx == remote_ptr_ctx)) {                        \
             mapped_rem_addr = (void *) remote_addr;                     \
@@ -168,17 +162,13 @@ uct_cuda_ipc_post_cuda_async_copy(uct_ep_h tl_ep, void *dst, void *src,
     CUstream                  stream;
     ucs_queue_head_t          *outstanding_queue;
 
-    if (!length) {
-        return UCS_OK;
-    }
-
+    if (!length) return UCS_OK;
     if (0 == iface->streams_initialized) {
         status = uct_cuda_ipc_iface_init_streams(iface);
         if (UCS_OK != status) return status;
     }
     stream = iface->stream_d2d[key->dev_num];
     outstanding_queue = &iface->outstanding_d2d_event_q;
-
     cuda_ipc_event = ucs_mpool_get(&iface->event_desc);
     if (ucs_unlikely(cuda_ipc_event == NULL)) {
         ucs_error("Failed to allocate cuda_ipc event object");
@@ -198,7 +188,6 @@ uct_cuda_ipc_post_cuda_async_copy(uct_ep_h tl_ep, void *dst, void *src,
     }
     ucs_queue_push(outstanding_queue, &cuda_ipc_event->queue);
     cuda_ipc_event->comp = comp;
-
     ucs_info("cuMemcpyDtoDAsync issued :%p dst:%p, src:%p  len:%ld",
              cuda_ipc_event, dst, src, length);
     return UCS_INPROGRESS;
@@ -208,24 +197,21 @@ ucs_status_t uct_cuda_ipc_ep_get_zcopy(uct_ep_h tl_ep, const uct_iov_t *iov,
                                        size_t iovcnt, uint64_t remote_addr,
                                        uct_rkey_t rkey, uct_completion_t *comp)
 {
-    uct_cuda_ipc_iface_t *iface = ucs_derived_of(tl_ep->iface,
-                                                 uct_cuda_ipc_iface_t);
+    uct_cuda_ipc_iface_t *iface = ucs_derived_of(tl_ep->iface, uct_cuda_ipc_iface_t);
     uct_cuda_ipc_key_t   *key   = (uct_cuda_ipc_key_t *) rkey;
     uct_cuda_ipc_ep_t    *ep = ucs_derived_of(tl_ep, uct_cuda_ipc_ep_t);
     ucs_status_t         status = UCS_OK;
     CUdevice             cu_device;
-    void                 *mapped_rem_addr      = NULL;
+    void                 *mapped_rem_addr = NULL;
 
     UCT_CUDA_IPC_ZERO_LENGTH_POST(iov[0].length);
     UCT_CUDA_IPC_GET_DEVICE(cu_device);
     UCT_CUDA_IPC_GET_MAPPED_ADDR(key, cu_device, remote_addr,
                                  mapped_rem_addr, iov);
-
     status = uct_cuda_ipc_post_cuda_async_copy(tl_ep, iov[0].buffer,
                                                (void *) mapped_rem_addr,
                                                iov[0].length,
                                                iface, key, comp);
-
     UCT_TL_EP_STAT_OP(ucs_derived_of(tl_ep, uct_base_ep_t), GET, ZCOPY,
                       uct_iov_total_length(iov, iovcnt));
     uct_cuda_ipc_trace_data(remote_addr, rkey, "GET_ZCOPY [length %zu]",
@@ -249,12 +235,10 @@ ucs_status_t uct_cuda_ipc_ep_put_zcopy(uct_ep_h tl_ep, const uct_iov_t *iov,
     UCT_CUDA_IPC_GET_DEVICE(cu_device);
     UCT_CUDA_IPC_GET_MAPPED_ADDR(key, cu_device, remote_addr,
                                  mapped_rem_addr, iov);
-
     status = uct_cuda_ipc_post_cuda_async_copy(tl_ep,
                                                (void *) mapped_rem_addr,
                                                iov[0].buffer, iov[0].length,
                                                iface, key, comp);
-
     UCT_TL_EP_STAT_OP(ucs_derived_of(tl_ep, uct_base_ep_t), PUT, ZCOPY,
                       uct_iov_total_length(iov, iovcnt));
     uct_cuda_ipc_trace_data(remote_addr, rkey, "PUT_ZCOPY [length %zu]",

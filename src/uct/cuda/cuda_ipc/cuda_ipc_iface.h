@@ -19,6 +19,7 @@
 #define UCT_CUDA_IPC_DEV_NAME   "cudaipc0"
 #define UCT_CUDA_IPC_MAX_PEERS  16
 
+
 typedef struct uct_cuda_ipc_iface {
     uct_base_iface_t super;
     ucs_mpool_t      event_desc;
@@ -32,16 +33,19 @@ typedef struct uct_cuda_ipc_iface {
     } config;
 } uct_cuda_ipc_iface_t;
 
+
 typedef struct uct_cuda_ipc_iface_config {
     uct_iface_config_t super;
     unsigned           max_poll;
 } uct_cuda_ipc_iface_config_t;
+
 
 typedef struct uct_cuda_ipc_event_desc {
     CUevent           event;
     uct_completion_t *comp;
     ucs_queue_elem_t  queue;
 } uct_cuda_ipc_event_desc_t;
+
 
 ucs_status_t uct_cuda_ipc_iface_init_streams(uct_cuda_ipc_iface_t *iface);
 
