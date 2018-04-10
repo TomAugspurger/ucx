@@ -36,7 +36,6 @@ typedef struct uct_cuda_ipc_ep_addr {
 typedef struct uct_cuda_ipc_ep {
     uct_base_ep_t          super;
     uct_cuda_ipc_rem_seg_t *rem_segments_hash[UCT_CUDA_IPC_HASH_SIZE];
-    struct uct_cuda_ipc_ep *next;
 } uct_cuda_ipc_ep_t;
 
 UCS_CLASS_DECLARE_NEW_FUNC(uct_cuda_ipc_ep_t, uct_ep_t, uct_iface_t*,
@@ -60,7 +59,7 @@ uct_cuda_ipc_rem_seg_hash(uct_cuda_ipc_rem_seg_t *seg)
     int      i;
     uint64_t hash_val = 7;
     for (i = 0; i < sizeof(seg->ph); i++) {
-        hash_val = hash_val*31 + seg->ph.reserved[i];
+        hash_val = (hash_val * 31) + seg->ph.reserved[i];
     }
     return (uint64_t) (hash_val % UCT_CUDA_IPC_HASH_SIZE);
 }

@@ -181,26 +181,6 @@ static ucs_status_t uct_cuda_ipc_query_md_resources(uct_md_resource_desc_t **res
     return uct_single_md_resource(&uct_cuda_ipc_md_component, resources_p, num_resources_p);
 }
 
-static int uct_is_cuda_ipc_mem_type_owned(uct_md_h md, void *addr, size_t length)
-{
-    int      memory_type;
-    CUresult cu_ret;
-
-    if (addr == NULL) {
-        return 0;
-    }
-
-    cu_ret = cuPointerGetAttribute(&memory_type,
-                                   CU_POINTER_ATTRIBUTE_MEMORY_TYPE,
-                                   (CUdeviceptr)addr);
-    if (cu_ret == CUDA_SUCCESS) {
-        if (memory_type == CU_MEMORYTYPE_DEVICE) {
-            return 1;
-        }
-    }
-    return 0;
-}
-
 static ucs_status_t uct_cuda_ipc_md_open(const char *md_name, const uct_md_config_t *md_config,
                                          uct_md_h *md_p)
 {
@@ -210,7 +190,7 @@ static ucs_status_t uct_cuda_ipc_md_open(const char *md_name, const uct_md_confi
         .mkey_pack         = uct_cuda_ipc_mkey_pack,
         .mem_reg           = uct_cuda_ipc_mem_reg,
         .mem_dereg         = uct_cuda_ipc_mem_dereg,
-        .is_mem_type_owned = uct_is_cuda_ipc_mem_type_owned,
+        .is_mem_type_owned = uct_cuda_is_mem_type_owned,
     };
     static uct_md_t md = {
         .ops          = &md_ops,

@@ -154,7 +154,7 @@ static unsigned uct_cuda_ipc_iface_progress(uct_iface_h tl_iface)
     unsigned             count;
 
     count =  uct_cuda_ipc_progress_event_queue(&iface->outstanding_d2d_event_q,
-                                              max_events);
+                                               max_events);
     return count;
 }
 
@@ -235,10 +235,10 @@ static UCS_CLASS_INIT_FUNC(uct_cuda_ipc_iface_t, uct_md_h md, uct_worker_h worke
                            const uct_iface_config_t *tl_config)
 {
     uct_cuda_ipc_iface_config_t *config = NULL;
-    ucs_status_t                status;
-    CUresult                    cu_ret;
-    int                         dev_count;
-    int                         i = 0, j = 0;
+    ucs_status_t status;
+    CUresult     cu_ret;
+    int          dev_count;
+    int          i, j;
 
     config = ucs_derived_of(tl_config, uct_cuda_ipc_iface_config_t);
 
