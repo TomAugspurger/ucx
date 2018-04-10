@@ -94,28 +94,26 @@ static ucs_status_t
 uct_cuda_ipc_mem_reg_internal(uct_md_h uct_md, void *address, size_t length,
                               unsigned flags, uct_cuda_ipc_mem_t *mem_hndl)
 {
-    CUresult       cu_ret;
     CUdevice       cu_device;
+    ucs_status_t   status;
 
     if (!length) {
         return UCS_OK;
     }
-
-    cu_ret = cuIpcGetMemHandle(&(mem_hndl->ph), (CUdeviceptr) address);
-    if (cu_ret != CUDA_SUCCESS) {
-        cuGetErrorString(cu_ret, &cu_err_str);
-        ucs_error("cuIpcGetMemHandle failed. length :%lu ret:%s", length, cu_err_str);
+    status = UCT_CUDADRV_FUNC(cuIpcGetMemHandle(&(mem_hndl->ph),
+                                                (CUdeviceptr) address));
+    if (UCS_OK != status) {
+        ucs_error("cuIpcGetMemHandle failed. length :%lu", length);
         goto err;
     }
 
     /* TODO: There are limitations when process has >1 contexts */
     UCT_CUDA_IPC_GET_DEVICE(cu_device);
-
-    cu_ret = cuMemGetAddressRange(&(mem_hndl->d_bptr), &(mem_hndl->b_len),
-                                  (CUdeviceptr) address);
-    if (cu_ret != CUDA_SUCCESS) {
-        cuGetErrorString(cu_ret, &cu_err_str);
-        ucs_error("cuMemGetAddressRange failed ret:%s", cu_err_str);
+    status = UCT_CUDADRV_FUNC(cuMemGetAddressRange(&(mem_hndl->d_bptr),
+                                                   &(mem_hndl->b_len),
+                                                   (CUdeviceptr) address));
+    if (UCS_OK != status) {
+        ucs_error("cuMemGetAddressRange failed");
         goto err;
     }
 
@@ -165,10 +163,10 @@ static ucs_status_t uct_cuda_ipc_query_md_resources(uct_md_resource_desc_t **res
                                                     unsigned *num_resources_p)
 {
     int      num_gpus;
-    CUresult cu_ret;
+    ucs_status_t status;
 
-    cu_ret = cuDeviceGetCount(&num_gpus);
-    if ((cu_ret != CUDA_SUCCESS) || (num_gpus == 0)) {
+    status = UCT_CUDADRV_FUNC(cuDeviceGetCount(&num_gpus));
+    if ((UCS_OK != status) || (num_gpus == 0)) {
         ucs_debug("not found cuda devices");
         *resources_p     = NULL;
         *num_resources_p = 0;
