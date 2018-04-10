@@ -78,14 +78,7 @@ void *uct_cuda_ipc_ep_attach_rem_seg(uct_cuda_ipc_ep_t *ep,
                                      uct_cuda_ipc_key_t *rkey)
 {
     uct_cuda_ipc_rem_seg_t *rem_seg, search;
-    CUdevice               cu_device;
     CUresult               cu_ret;
-
-    cu_ret = cuCtxGetDevice(&cu_device);
-    if (cu_ret != CUDA_SUCCESS) {
-        cuGetErrorString(cu_ret, &cu_err_str);
-        ucs_fatal("cuCtxGetDevice failed ret:%s", cu_err_str);
-    }
 
     /* Are all other members of *search* zeroed out? or ignored?*/
     search.ph = rkey->ph;
@@ -116,19 +109,78 @@ void *uct_cuda_ipc_ep_attach_rem_seg(uct_cuda_ipc_ep_t *ep,
     return (void *) rem_seg->d_bptr;
 }
 
+#define UCT_CUDA_IPC_GET_MAPPED_ADDR(key, cu_device, remote_addr,       \
+                                     mapped_rem_addr, iov)              \
+    do {                                                                \
+        void                 *mapped_rem_base_addr = NULL;              \
+        CUresult             cu_err;                                    \
+        CUresult             cu_ret;                                    \
+        int                  offset = 0;                                \
+        CUcontext            local_ptr_ctx;                             \
+        CUcontext            remote_ptr_ctx;                            \
+        CUpointer_attribute  attribute;                                 \
+                                                                        \
+        if (key->dev_num == (int) cu_device) {                          \
+            attribute = CU_POINTER_ATTRIBUTE_CONTEXT;                   \
+            cu_ret = cuPointerGetAttribute((void *) &remote_ptr_ctx, attribute, \
+                                           (CUdeviceptr) remote_addr);  \
+            if (CUDA_ERROR_INVALID_VALUE != cu_ret) {                   \
+                /* context belongs to another process that uses the same \
+                   device */                                            \
+                cu_err = cu_ret;                                        \
+            } else if (cu_ret != CUDA_SUCCESS) {                        \
+                cuGetErrorString(cu_ret, &cu_err_str);                  \
+                ucs_error("cuPointerGetAttribute failed ret:%s", cu_err_str); \
+                return UCS_ERR_IO_ERROR;                                \
+            }                                                           \
+                                                                        \
+            /* assumes iov is uniformly on device or not */             \
+            cu_ret = cuPointerGetAttribute((void *) &local_ptr_ctx, attribute, \
+                                           (CUdeviceptr) iov[0].buffer); \
+            if (cu_ret != CUDA_SUCCESS) {                               \
+                cuGetErrorString(cu_ret, &cu_err_str);                  \
+                ucs_error("cuPointerGetAttribute failed ret:%s", cu_err_str); \
+                return UCS_ERR_IO_ERROR;                                \
+            }                                                           \
+        }                                                               \
+                                                                        \
+        if ((CUDA_SUCCESS == cu_err) && (key->dev_num == (int) cu_device) && \
+            (local_ptr_ctx == remote_ptr_ctx)) {                        \
+            mapped_rem_addr = (void *) remote_addr;                     \
+        }                                                               \
+        else {                                                          \
+            /* Is uintptr_t equivalent to uint64_t?  */                 \
+            mapped_rem_base_addr = uct_cuda_ipc_ep_attach_rem_seg(ep, iface, \
+                                                                  key); \
+            offset = (uintptr_t) remote_addr - (uintptr_t) key->d_rem_bptr; \
+            if (offset > key->b_rem_len) {                              \
+                ucs_fatal("Access memory outside memory range attempt\n"); \
+            }                                                           \
+            mapped_rem_addr = (void *) ((uintptr_t) mapped_rem_base_addr + offset); \
+        }                                                               \
+    } while(0);
+
 static UCS_F_ALWAYS_INLINE ucs_status_t
 uct_cuda_ipc_post_cuda_async_copy(uct_ep_h tl_ep, void *dst, void *src,
-                                  size_t length, CUstream stream,
-                                  ucs_queue_head_t *outstanding_queue,
-                                  uct_completion_t *comp)
+                                  size_t length, uct_cuda_ipc_iface_t *iface,
+                                  uct_cuda_ipc_key_t *key, uct_completion_t *comp)
 {
-    uct_cuda_ipc_iface_t      *iface = ucs_derived_of(tl_ep->iface, uct_cuda_ipc_iface_t);
+    ucs_status_t              status = UCS_OK;
     uct_cuda_ipc_event_desc_t *cuda_ipc_event;
     CUresult                  cu_ret;
+    CUstream                  stream;
+    ucs_queue_head_t          *outstanding_queue;
 
     if (!length) {
         return UCS_OK;
     }
+
+    if (0 == iface->streams_initialized) {
+        status = uct_cuda_ipc_iface_init_streams(iface);
+        if (UCS_OK != status) return status;
+    }
+    stream = iface->stream_d2d[key->dev_num];
+    outstanding_queue = &iface->outstanding_d2d_event_q;
 
     cuda_ipc_event = ucs_mpool_get(&iface->event_desc);
     if (ucs_unlikely(cuda_ipc_event == NULL)) {
@@ -169,73 +221,17 @@ ucs_status_t uct_cuda_ipc_ep_get_zcopy(uct_ep_h tl_ep, const uct_iov_t *iov, siz
     ucs_status_t         status = UCS_OK;
     CUdevice             cu_device;
     CUresult             cu_ret;
-    CUresult             cu_err;
-    int                  offset = 0;
     void                 *mapped_rem_addr      = NULL;
-    void                 *mapped_rem_base_addr = NULL;
-    CUcontext            local_ptr_ctx;
-    CUcontext            remote_ptr_ctx;
-    CUpointer_attribute  attribute;
 
     UCT_CUDA_IPC_ZERO_LENGTH_POST(iov[0].length);
-
-    cu_ret = cuCtxGetDevice(&cu_device);
-    if (cu_ret != CUDA_SUCCESS) {
-        cuGetErrorString(cu_ret, &cu_err_str);
-        ucs_error("cuCtxGetDevice failed ret:%s", cu_err_str);
-        goto err;
-    }
-
-    if (key->dev_num == (int) cu_device) {
-        attribute = CU_POINTER_ATTRIBUTE_CONTEXT;
-        cu_ret = cuPointerGetAttribute((void *) &remote_ptr_ctx, attribute,
-                                       (CUdeviceptr) remote_addr);
-        if (CUDA_ERROR_INVALID_VALUE != cu_ret) {
-            /* context belongs to another process that uses the same
-               device */
-            cu_err = cu_ret;
-        } else if (cu_ret != CUDA_SUCCESS) {
-            cuGetErrorString(cu_ret, &cu_err_str);
-            ucs_error("cuPointerGetAttribute failed ret:%s", cu_err_str);
-            goto err;
-        }
-
-        /* assumes iov is uniformly on device or not */
-        cu_ret = cuPointerGetAttribute((void *) &local_ptr_ctx, attribute,
-                                       (CUdeviceptr) iov[0].buffer);
-        if (cu_ret != CUDA_SUCCESS) {
-            cuGetErrorString(cu_ret, &cu_err_str);
-            ucs_error("cuPointerGetAttribute failed ret:%s", cu_err_str);
-            goto err;
-        }
-    }
-
-    if (0 == iface->streams_initialized) {
-        status = uct_cuda_ipc_iface_init_streams(iface);
-        if (UCS_OK != status) return status;
-    }
-
-    if ((CUDA_SUCCESS == cu_err) && (key->dev_num == (int) cu_device) &&
-        (local_ptr_ctx == remote_ptr_ctx)) {
-        mapped_rem_addr = (void *) remote_addr;
-    }
-    else {
-        /* Is uintptr_t equivalent to uint64_t?  */
-        mapped_rem_base_addr = uct_cuda_ipc_ep_attach_rem_seg(ep, iface,
-                                                                  key);
-        offset = (uintptr_t) remote_addr - (uintptr_t) key->d_rem_bptr;
-        if (offset > key->b_rem_len) {
-            ucs_fatal("Attempting to access memory outside memory range\n");
-        }
-        mapped_rem_addr = (void *) ((uintptr_t) mapped_rem_base_addr + offset);
-    }
+    UCT_CUDA_IPC_GET_DEVICE(cu_device);
+    UCT_CUDA_IPC_GET_MAPPED_ADDR(key, cu_device, remote_addr,
+                                 mapped_rem_addr, iov);
 
     status = uct_cuda_ipc_post_cuda_async_copy(tl_ep, iov[0].buffer,
                                                (void *) mapped_rem_addr,
                                                iov[0].length,
-                                               iface->stream_d2d[key->dev_num],
-                                               &iface->outstanding_d2d_event_q,
-                                               comp);
+                                               iface, key, comp);
 
     UCT_TL_EP_STAT_OP(ucs_derived_of(tl_ep, uct_base_ep_t), GET, ZCOPY,
                       uct_iov_total_length(iov, iovcnt));
@@ -257,74 +253,17 @@ ucs_status_t uct_cuda_ipc_ep_put_zcopy(uct_ep_h tl_ep, const uct_iov_t *iov, siz
     ucs_status_t         status = UCS_OK;
     CUdevice             cu_device;
     CUresult             cu_ret;
-    CUresult             cu_err;
-    int                  offset = 0;
     void                 *mapped_rem_addr      = NULL;
-    void                 *mapped_rem_base_addr = NULL;
-    CUcontext            local_ptr_ctx;
-    CUcontext            remote_ptr_ctx;
-    CUpointer_attribute  attribute;
 
     UCT_CUDA_IPC_ZERO_LENGTH_POST(iov[0].length);
-
-    cu_ret = cuCtxGetDevice(&cu_device);
-    if (cu_ret != CUDA_SUCCESS) {
-        cuGetErrorString(cu_ret, &cu_err_str);
-        ucs_error("cuCtxGetDevice failed ret:%s", cu_err_str);
-        goto err;
-    }
-
-    if (key->dev_num == (int) cu_device) {
-        attribute = CU_POINTER_ATTRIBUTE_CONTEXT;
-        cu_ret = cuPointerGetAttribute((void *) &remote_ptr_ctx, attribute,
-                                       (CUdeviceptr) remote_addr);
-        if (CUDA_ERROR_INVALID_VALUE != cu_ret) {
-            /* context belongs to another process that uses the same
-               device */
-            cu_err = cu_ret;
-        } else if (cu_ret != CUDA_SUCCESS) {
-            cuGetErrorString(cu_ret, &cu_err_str);
-            ucs_error("cuPointerGetAttribute failed ret:%s", cu_err_str);
-            goto err;
-        }
-
-        /* assumes iov is uniformly on device or not */
-        cu_ret = cuPointerGetAttribute((void *) &local_ptr_ctx, attribute,
-                                       (CUdeviceptr) iov[0].buffer);
-        if (cu_ret != CUDA_SUCCESS) {
-            cuGetErrorString(cu_ret, &cu_err_str);
-            ucs_error("cuPointerGetAttribute failed ret:%s", cu_err_str);
-            goto err;
-        }
-    }
-
-    if (0 == iface->streams_initialized) {
-        status = uct_cuda_ipc_iface_init_streams(iface);
-        if (UCS_OK != status) return status;
-    }
-
-    if ((CUDA_SUCCESS == cu_err) && (key->dev_num == (int) cu_device) &&
-        (local_ptr_ctx == remote_ptr_ctx)) {
-        mapped_rem_addr = (void *) remote_addr;
-    }
-    else {
-        /* Is uintptr_t equivalent to uint64_t?  */
-        mapped_rem_base_addr = uct_cuda_ipc_ep_attach_rem_seg(ep, iface,
-                                                                  key);
-        offset = (uintptr_t) remote_addr - (uintptr_t) key->d_rem_bptr;
-        if (offset > key->b_rem_len) {
-            ucs_fatal("Attempting to access memory outside memory range\n");
-        }
-        mapped_rem_addr = (void *) ((uintptr_t) mapped_rem_base_addr + offset);
-    }
+    UCT_CUDA_IPC_GET_DEVICE(cu_device);
+    UCT_CUDA_IPC_GET_MAPPED_ADDR(key, cu_device, remote_addr,
+                                 mapped_rem_addr, iov);
 
     status = uct_cuda_ipc_post_cuda_async_copy(tl_ep,
                                                (void *) mapped_rem_addr,
-                                               iov[0].buffer,
-                                               iov[0].length,
-                                               iface->stream_d2d[key->dev_num],
-                                               &iface->outstanding_d2d_event_q,
-                                               comp);
+                                               iov[0].buffer, iov[0].length,
+                                               iface, key, comp);
 
     UCT_TL_EP_STAT_OP(ucs_derived_of(tl_ep, uct_base_ep_t), PUT, ZCOPY,
                       uct_iov_total_length(iov, iovcnt));

@@ -68,12 +68,7 @@ static ucs_status_t uct_cuda_ipc_rkey_unpack(uct_md_component_t *mdc,
     CUdevice           cu_device;
     CUresult           cu_ret;
 
-    cu_ret = cuCtxGetDevice(&cu_device);
-    if (cu_ret != CUDA_SUCCESS) {
-        cuGetErrorString(cu_ret, &cu_err_str);
-        ucs_error("cuCtxGetDevice failed ret:%s", cu_err_str);
-        goto err;
-    }
+    UCT_CUDA_IPC_GET_DEVICE(cu_device);
 
     key = ucs_malloc(sizeof(uct_cuda_ipc_key_t), "uct_cuda_ipc_key_t");
     if (NULL == key) {
@@ -117,12 +112,7 @@ uct_cuda_ipc_mem_reg_internal(uct_md_h uct_md, void *address, size_t length,
     }
 
     /* TODO: There are limitations when process has >1 contexts */
-    cu_ret = cuCtxGetDevice(&cu_device);
-    if (cu_ret != CUDA_SUCCESS) {
-        cuGetErrorString(cu_ret, &cu_err_str);
-        ucs_error("cuCtxGetDevice failed ret:%s", cu_err_str);
-        goto err;
-    }
+    UCT_CUDA_IPC_GET_DEVICE(cu_device);
 
     cu_ret = cuMemGetAddressRange(&(mem_hndl->d_bptr), &(mem_hndl->b_len),
                                   (CUdeviceptr) address);

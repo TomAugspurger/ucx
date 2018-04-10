@@ -60,4 +60,14 @@ typedef struct uct_cuda_ipc_key {
     int            dev_num;      /* GPU Device number */
 } uct_cuda_ipc_key_t;
 
+#define UCT_CUDA_IPC_GET_DEVICE(cu_device)                              \
+   do {                                                                 \
+       cu_ret = cuCtxGetDevice(&cu_device);                             \
+       if (cu_ret != CUDA_SUCCESS) {                                    \
+           cuGetErrorString(cu_ret, &cu_err_str);                       \
+           ucs_error("cuCtxGetDevice failed ret:%s", cu_err_str);       \
+           goto err;                                                    \
+       }                                                                \
+   } while(0);
+
 #endif
