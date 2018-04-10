@@ -61,7 +61,7 @@ static ucs_status_t uct_cuda_ipc_rkey_unpack(uct_md_component_t *mdc,
 {
     uct_cuda_ipc_key_t *packed = (uct_cuda_ipc_key_t *) rkey_buffer;
     uct_cuda_ipc_key_t *key;
-    CUdevice           cu_device;
+    CUdevice cu_device;
 
     UCT_CUDA_IPC_GET_DEVICE(cu_device);
     key = ucs_malloc(sizeof(uct_cuda_ipc_key_t), "uct_cuda_ipc_key_t");
@@ -88,8 +88,8 @@ static ucs_status_t
 uct_cuda_ipc_mem_reg_internal(uct_md_h uct_md, void *address, size_t length,
                               unsigned flags, uct_cuda_ipc_mem_t *mem_hndl)
 {
-    CUdevice       cu_device;
-    ucs_status_t   status;
+    ucs_status_t status;
+    CUdevice cu_device;
 
     if (!length) return UCS_OK;
     status = UCT_CUDADRV_FUNC(cuIpcGetMemHandle(&(mem_hndl->ph),
@@ -146,8 +146,8 @@ static ucs_status_t uct_cuda_ipc_mem_dereg(uct_md_h md, uct_mem_h memh)
 static ucs_status_t uct_cuda_ipc_query_md_resources(uct_md_resource_desc_t **resources_p,
                                                     unsigned *num_resources_p)
 {
-    int      num_gpus;
     ucs_status_t status;
+    int num_gpus;
 
     status = UCT_CUDADRV_FUNC(cuDeviceGetCount(&num_gpus));
     if ((UCS_OK != status) || (num_gpus == 0)) {

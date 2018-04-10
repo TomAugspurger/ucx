@@ -36,9 +36,9 @@ static UCS_CLASS_INIT_FUNC(uct_cuda_ipc_ep_t, uct_iface_t *tl_iface,
 
 static UCS_CLASS_CLEANUP_FUNC(uct_cuda_ipc_ep_t)
 {
-    uct_cuda_ipc_rem_seg_t                              *remote_seg;
-    ucs_status_t                                        status;
     struct sglib_hashed_uct_cuda_ipc_rem_seg_t_iterator iter;
+    uct_cuda_ipc_rem_seg_t *remote_seg;
+    ucs_status_t status;
 
     for (remote_seg = sglib_hashed_uct_cuda_ipc_rem_seg_t_it_init(&iter, self->rem_segments_hash);
          remote_seg != NULL;
@@ -76,7 +76,7 @@ void *uct_cuda_ipc_ep_attach_rem_seg(uct_cuda_ipc_ep_t *ep,
                                      uct_cuda_ipc_key_t *rkey)
 {
     uct_cuda_ipc_rem_seg_t *rem_seg, search;
-    ucs_status_t           status;
+    ucs_status_t status;
 
     /* Are all other members of *search* zeroed out? or ignored?*/
     search.ph = rkey->ph;
@@ -106,21 +106,20 @@ void *uct_cuda_ipc_ep_attach_rem_seg(uct_cuda_ipc_ep_t *ep,
 #define UCT_CUDA_IPC_GET_MAPPED_ADDR(key, cu_device, remote_addr,       \
                                      mapped_rem_addr, iov)              \
     do {                                                                \
-        void                 *mapped_rem_base_addr = NULL;              \
-        CUresult             cu_err;                                    \
-        CUresult             cu_ret;                                    \
-        int                  offset = 0;                                \
-        CUcontext            local_ptr_ctx;                             \
-        CUcontext            remote_ptr_ctx;                            \
+        void *mapped_rem_base_addr = NULL;                              \
+        int  offset                = 0;                                 \
+        CUresult cu_err;                                                \
+        CUresult cu_ret;                                                \
+        CUcontext local_ptr_ctx;                                        \
+        CUcontext remote_ptr_ctx;                                       \
         CUpointer_attribute  attribute;                                 \
                                                                         \
         if (key->dev_num == (int) cu_device) {                          \
             attribute = CU_POINTER_ATTRIBUTE_CONTEXT;                   \
-            cu_ret = cuPointerGetAttribute((void *) &remote_ptr_ctx, attribute, \
-                                           (CUdeviceptr) remote_addr);  \
+            cu_ret    = cuPointerGetAttribute((void *) &remote_ptr_ctx, attribute, \
+                                              (CUdeviceptr) remote_addr); \
             if (CUDA_ERROR_INVALID_VALUE != cu_ret) {                   \
-                /* context belongs to another process that uses the same \
-                   device */                                            \
+                /* another process's contex using the same device */    \
                 cu_err = cu_ret;                                        \
             } else if (cu_ret != CUDA_SUCCESS) {                        \
                 cuGetErrorString(cu_ret, &cu_err_str);                  \
@@ -157,10 +156,10 @@ uct_cuda_ipc_post_cuda_async_copy(uct_ep_h tl_ep, void *dst, void *src,
                                   size_t length, uct_cuda_ipc_iface_t *iface,
                                   uct_cuda_ipc_key_t *key, uct_completion_t *comp)
 {
-    ucs_status_t              status = UCS_OK;
+    ucs_status_t status = UCS_OK;
     uct_cuda_ipc_event_desc_t *cuda_ipc_event;
-    CUstream                  stream;
-    ucs_queue_head_t          *outstanding_queue;
+    CUstream stream;
+    ucs_queue_head_t *outstanding_queue;
 
     if (!length) return UCS_OK;
     if (0 == iface->streams_initialized) {
@@ -199,10 +198,10 @@ ucs_status_t uct_cuda_ipc_ep_get_zcopy(uct_ep_h tl_ep, const uct_iov_t *iov,
 {
     uct_cuda_ipc_iface_t *iface = ucs_derived_of(tl_ep->iface, uct_cuda_ipc_iface_t);
     uct_cuda_ipc_key_t   *key   = (uct_cuda_ipc_key_t *) rkey;
-    uct_cuda_ipc_ep_t    *ep = ucs_derived_of(tl_ep, uct_cuda_ipc_ep_t);
+    uct_cuda_ipc_ep_t    *ep    = ucs_derived_of(tl_ep, uct_cuda_ipc_ep_t);
     ucs_status_t         status = UCS_OK;
-    CUdevice             cu_device;
     void                 *mapped_rem_addr = NULL;
+    CUdevice cu_device;
 
     UCT_CUDA_IPC_ZERO_LENGTH_POST(iov[0].length);
     UCT_CUDA_IPC_GET_DEVICE(cu_device);
@@ -223,13 +222,12 @@ ucs_status_t uct_cuda_ipc_ep_put_zcopy(uct_ep_h tl_ep, const uct_iov_t *iov,
                                        size_t iovcnt, uint64_t remote_addr,
                                        uct_rkey_t rkey, uct_completion_t *comp)
 {
-    uct_cuda_ipc_iface_t *iface = ucs_derived_of(tl_ep->iface,
-                                                 uct_cuda_ipc_iface_t);
+    uct_cuda_ipc_iface_t *iface = ucs_derived_of(tl_ep->iface, uct_cuda_ipc_iface_t);
     uct_cuda_ipc_key_t   *key   = (uct_cuda_ipc_key_t *) rkey;
-    uct_cuda_ipc_ep_t    *ep = ucs_derived_of(tl_ep, uct_cuda_ipc_ep_t);
+    uct_cuda_ipc_ep_t    *ep    = ucs_derived_of(tl_ep, uct_cuda_ipc_ep_t);
     ucs_status_t         status = UCS_OK;
-    CUdevice             cu_device;
-    void                 *mapped_rem_addr      = NULL;
+    void                 *mapped_rem_addr  = NULL;
+    CUdevice cu_device;
 
     UCT_CUDA_IPC_ZERO_LENGTH_POST(iov[0].length);
     UCT_CUDA_IPC_GET_DEVICE(cu_device);
