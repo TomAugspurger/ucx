@@ -14,7 +14,6 @@
 
 
 static ucs_config_field_t uct_cuda_ipc_iface_config_table[] = {
-
     {"", "", NULL,
      ucs_offsetof(uct_cuda_ipc_iface_config_t, super),
      UCS_CONFIG_TYPE_TABLE(uct_iface_config_table)},
@@ -138,8 +137,8 @@ uct_cuda_ipc_progress_event_queue(ucs_queue_head_t *event_queue, unsigned max_ev
 
 static unsigned uct_cuda_ipc_iface_progress(uct_iface_h tl_iface)
 {
-    uct_cuda_ipc_iface_t *iface     = ucs_derived_of(tl_iface, uct_cuda_ipc_iface_t);
-    unsigned             max_events = iface->config.max_poll;
+    uct_cuda_ipc_iface_t *iface = ucs_derived_of(tl_iface, uct_cuda_ipc_iface_t);
+    unsigned max_events = iface->config.max_poll;
     unsigned count;
 
     count =  uct_cuda_ipc_progress_event_queue(&iface->outstanding_d2d_event_q, max_events);

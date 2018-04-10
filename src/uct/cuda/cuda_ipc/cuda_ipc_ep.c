@@ -110,7 +110,7 @@ uct_cuda_ipc_get_mapped_addr(uct_cuda_ipc_key_t *key, int cu_device,
                              uct_cuda_ipc_iface_t *iface)
 {
     void *mapped_rem_base_addr = NULL;
-    int  offset                = 0;
+    int offset = 0;
     CUresult cu_err;
     CUresult cu_ret;
     CUcontext local_ptr_ctx;
@@ -201,10 +201,10 @@ ucs_status_t uct_cuda_ipc_ep_get_zcopy(uct_ep_h tl_ep, const uct_iov_t *iov,
                                        uct_rkey_t rkey, uct_completion_t *comp)
 {
     uct_cuda_ipc_iface_t *iface = ucs_derived_of(tl_ep->iface, uct_cuda_ipc_iface_t);
-    uct_cuda_ipc_key_t   *key   = (uct_cuda_ipc_key_t *) rkey;
-    uct_cuda_ipc_ep_t    *ep    = ucs_derived_of(tl_ep, uct_cuda_ipc_ep_t);
-    ucs_status_t         status = UCS_OK;
-    void                 *mapped_rem_addr = NULL;
+    uct_cuda_ipc_key_t *key = (uct_cuda_ipc_key_t *) rkey;
+    uct_cuda_ipc_ep_t *ep = ucs_derived_of(tl_ep, uct_cuda_ipc_ep_t);
+    ucs_status_t status = UCS_OK;
+    void *mapped_rem_addr = NULL;
     CUdevice cu_device;
 
     UCT_CUDA_IPC_ZERO_LENGTH_POST(iov[0].length);
@@ -228,10 +228,10 @@ ucs_status_t uct_cuda_ipc_ep_put_zcopy(uct_ep_h tl_ep, const uct_iov_t *iov,
                                        uct_rkey_t rkey, uct_completion_t *comp)
 {
     uct_cuda_ipc_iface_t *iface = ucs_derived_of(tl_ep->iface, uct_cuda_ipc_iface_t);
-    uct_cuda_ipc_key_t   *key   = (uct_cuda_ipc_key_t *) rkey;
-    uct_cuda_ipc_ep_t    *ep    = ucs_derived_of(tl_ep, uct_cuda_ipc_ep_t);
-    ucs_status_t         status = UCS_OK;
-    void                 *mapped_rem_addr  = NULL;
+    uct_cuda_ipc_key_t *key = (uct_cuda_ipc_key_t *) rkey;
+    uct_cuda_ipc_ep_t *ep = ucs_derived_of(tl_ep, uct_cuda_ipc_ep_t);
+    ucs_status_t status = UCS_OK;
+    void *mapped_rem_addr  = NULL;
     CUdevice cu_device;
 
     UCT_CUDA_IPC_ZERO_LENGTH_POST(iov[0].length);
