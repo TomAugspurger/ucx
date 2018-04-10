@@ -14,13 +14,6 @@
 #include <ucs/debug/memtrack.h>
 #include <ucs/type/class.h>
 
-SGLIB_DEFINE_LIST_FUNCTIONS(uct_cuda_ipc_rem_seg_t,
-                            uct_cuda_ipc_rem_seg_compare, next)
-
-SGLIB_DEFINE_HASHED_CONTAINER_FUNCTIONS(uct_cuda_ipc_rem_seg_t,
-                                        UCT_CUDA_IPC_HASH_SIZE,
-                                        uct_cuda_ipc_rem_seg_hash)
-
 
 static UCS_CLASS_INIT_FUNC(uct_cuda_ipc_ep_t, uct_iface_t *tl_iface,
                            const uct_device_addr_t *dev_addr,
@@ -29,24 +22,12 @@ static UCS_CLASS_INIT_FUNC(uct_cuda_ipc_ep_t, uct_iface_t *tl_iface,
     uct_cuda_ipc_iface_t *iface = ucs_derived_of(tl_iface, uct_cuda_ipc_iface_t);
 
     UCS_CLASS_CALL_SUPER_INIT(uct_base_ep_t, &iface->super);
-    sglib_hashed_uct_cuda_ipc_rem_seg_t_init(self->rem_segments_hash);
 
     return UCS_OK;
 }
 
 static UCS_CLASS_CLEANUP_FUNC(uct_cuda_ipc_ep_t)
 {
-    struct sglib_hashed_uct_cuda_ipc_rem_seg_t_iterator iter;
-    uct_cuda_ipc_rem_seg_t *remote_seg;
-
-    for (remote_seg = sglib_hashed_uct_cuda_ipc_rem_seg_t_it_init(&iter, self->rem_segments_hash);
-         remote_seg != NULL;
-         remote_seg = sglib_hashed_uct_cuda_ipc_rem_seg_t_it_next(&iter)) {
-            sglib_hashed_uct_cuda_ipc_rem_seg_t_delete(self->rem_segments_hash,
-                                                       remote_seg);
-            UCT_CUDADRV_FUNC(cuIpcCloseMemHandle(remote_seg->d_bptr));
-            ucs_free(remote_seg);
-    }
 }
 
 UCS_CLASS_DEFINE(uct_cuda_ipc_ep_t, uct_base_ep_t)
@@ -65,33 +46,6 @@ UCS_CLASS_DEFINE_DELETE_FUNC(uct_cuda_ipc_ep_t, uct_ep_t);
             return UCS_OK;                                      \
         }                                                       \
     } while(0);
-
-void *uct_cuda_ipc_ep_attach_rem_seg(uct_cuda_ipc_ep_t *ep,
-                                     uct_cuda_ipc_iface_t *iface,
-                                     uct_cuda_ipc_key_t *rkey)
-{
-    uct_cuda_ipc_rem_seg_t *rem_seg, search;
-
-    /* Are all other members of *search* zeroed out? or ignored?*/
-    search.ph = rkey->ph;
-    rem_seg = sglib_hashed_uct_cuda_ipc_rem_seg_t_find_member(ep->rem_segments_hash, &search);
-    if (rem_seg == NULL) {
-        rem_seg = ucs_malloc(sizeof(*rem_seg), "rem_seg");
-        if (rem_seg == NULL) {
-            ucs_fatal("Failed to allocated memory for a remote segment. %m");
-        }
-        rem_seg->ph      = rkey->ph;
-        rem_seg->dev_num = rkey->dev_num;
-        /* Attach memory to own GPU address space */
-        UCT_CUDADRV_FUNC(cuIpcOpenMemHandle((CUdeviceptr *) &rem_seg->d_bptr, rkey->ph,
-                                            CU_IPC_MEM_LAZY_ENABLE_PEER_ACCESS));
-        rem_seg->b_len = rkey->b_rem_len;
-        /* put the base address into the ep's hash table */
-        sglib_hashed_uct_cuda_ipc_rem_seg_t_add(ep->rem_segments_hash,
-                                                rem_seg);
-    }
-    return (void *) rem_seg->d_bptr;
-}
 
 static UCS_F_ALWAYS_INLINE ucs_status_t
 uct_cuda_ipc_get_mapped_addr(uct_cuda_ipc_key_t *key, int cu_device,
@@ -133,9 +87,8 @@ uct_cuda_ipc_get_mapped_addr(uct_cuda_ipc_key_t *key, int cu_device,
         mapped_rem_addr = (void *) remote_addr;
     }
     else {
-        /* Is uintptr_t equivalent to uint64_t? */
-        mapped_rem_base_addr = uct_cuda_ipc_ep_attach_rem_seg(ep, iface,
-                                                              key);
+        UCT_CUDADRV_FUNC(cuIpcOpenMemHandle((CUdeviceptr *) &mapped_rem_base_addr, key->ph,
+                                            CU_IPC_MEM_LAZY_ENABLE_PEER_ACCESS));
         offset = (uintptr_t) remote_addr - (uintptr_t) key->d_rem_bptr;
         if (offset > key->b_rem_len) {
             ucs_fatal("Access memory outside memory range attempt\n");

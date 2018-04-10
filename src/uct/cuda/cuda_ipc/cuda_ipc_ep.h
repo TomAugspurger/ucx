@@ -58,32 +58,4 @@ ucs_status_t uct_cuda_ipc_ep_put_zcopy(uct_ep_h tl_ep,
                                        uint64_t remote_addr, uct_rkey_t rkey,
                                        uct_completion_t *comp);
 
-
-/* Will this hash suffice? */
-static inline uint64_t
-uct_cuda_ipc_rem_seg_hash(uct_cuda_ipc_rem_seg_t *seg)
-{
-    uint64_t hash_val = 7;
-    int i;
-    for (i = 0; i < sizeof(seg->ph); i++) {
-        hash_val = (hash_val * 31) + seg->ph.reserved[i];
-    }
-    return (uint64_t) (hash_val % UCT_CUDA_IPC_HASH_SIZE);
-}
-
-
-static inline uint64_t
-uct_cuda_ipc_rem_seg_compare(uct_cuda_ipc_rem_seg_t *seg1,
-                             uct_cuda_ipc_rem_seg_t *seg2)
-{
-    return (uint64_t) (strncmp(seg1->ph.reserved, seg2->ph.reserved,
-                                    sizeof(CUipcMemHandle)));
-}
-
-SGLIB_DEFINE_LIST_PROTOTYPES(uct_cuda_ipc_rem_seg_t, uct_cuda_ipc_rem_seg_compare, next)
-
-
-SGLIB_DEFINE_HASHED_CONTAINER_PROTOTYPES(uct_cuda_ipc_rem_seg_t, UCT_CUDA_IPC_HASH_SIZE,
-                                         uct_cuda_ipc_rem_seg_hash)
-
 #endif
