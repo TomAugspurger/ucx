@@ -88,25 +88,14 @@ static ucs_status_t
 uct_cuda_ipc_mem_reg_internal(uct_md_h uct_md, void *address, size_t length,
                               unsigned flags, uct_cuda_ipc_mem_t *mem_hndl)
 {
-    ucs_status_t status;
     CUdevice cu_device;
 
     if (!length) return UCS_OK;
-    status = UCT_CUDADRV_FUNC(cuIpcGetMemHandle(&(mem_hndl->ph),
-                                                (CUdeviceptr) address));
-    if (UCS_OK != status) {
-        ucs_error("cuIpcGetMemHandle failed. length :%lu", length);
-        goto err;
-    }
+    UCT_CUDADRV_FUNC(cuIpcGetMemHandle(&(mem_hndl->ph), (CUdeviceptr) address));
     /* TODO: There are limitations when process has >1 contexts */
     UCT_CUDA_IPC_GET_DEVICE(cu_device);
-    status = UCT_CUDADRV_FUNC(cuMemGetAddressRange(&(mem_hndl->d_bptr),
-                                                   &(mem_hndl->b_len),
-                                                   (CUdeviceptr) address));
-    if (UCS_OK != status) {
-        ucs_error("cuMemGetAddressRange failed");
-        goto err;
-    }
+    UCT_CUDADRV_FUNC(cuMemGetAddressRange(&(mem_hndl->d_bptr), &(mem_hndl->b_len),
+                                          (CUdeviceptr) address));
     mem_hndl->d_ptr    = (CUdeviceptr) address;
     mem_hndl->reg_size = length;
     mem_hndl->dev_num  = (int) cu_device;

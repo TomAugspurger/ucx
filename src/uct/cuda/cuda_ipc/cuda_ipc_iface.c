@@ -169,39 +169,24 @@ static uct_iface_ops_t uct_cuda_ipc_iface_ops = {
 static void uct_cuda_ipc_event_desc_init(ucs_mpool_t *mp, void *obj, void *chunk)
 {
     uct_cuda_ipc_event_desc_t *base = (uct_cuda_ipc_event_desc_t *) obj;
-    ucs_status_t status;
 
     memset(base, 0 , sizeof(*base));
-    status = UCT_CUDADRV_FUNC(cuEventCreate(&(base->event), CU_EVENT_DISABLE_TIMING));
-    if (UCS_OK != status) {
-        ucs_error("cuEventCreate Failed");
-    }
+    UCT_CUDADRV_FUNC(cuEventCreate(&(base->event), CU_EVENT_DISABLE_TIMING));
 }
 
 static void uct_cuda_ipc_event_desc_cleanup(ucs_mpool_t *mp, void *obj)
 {
     uct_cuda_ipc_event_desc_t *base = (uct_cuda_ipc_event_desc_t *) obj;
-    ucs_status_t status;
 
-    status = UCT_CUDADRV_FUNC(cuEventDestroy(base->event));
-    if (UCS_OK != status) {
-        ucs_error("cuEventDestroy Failed");
-    }
+    UCT_CUDADRV_FUNC(cuEventDestroy(base->event));
 }
 
 ucs_status_t uct_cuda_ipc_iface_init_streams(uct_cuda_ipc_iface_t *iface)
 {
-    ucs_status_t status;
     int i;
 
-    for (i = 0; i < iface->device_count; i++) {
-        status = UCT_CUDADRV_FUNC(cuStreamCreate(&iface->stream_d2d[i],
-                                                 CU_STREAM_NON_BLOCKING));
-        if (UCS_OK != status) {
-            ucs_error("cuStreamCreate d2d (lane %d) error", i);
-            return UCS_ERR_IO_ERROR;
-        }
-    }
+    for (i = 0; i < iface->device_count; i++)
+        UCT_CUDADRV_FUNC(cuStreamCreate(&iface->stream_d2d[i], CU_STREAM_NON_BLOCKING));
     iface->streams_initialized = 1;
 
     return UCS_OK;
@@ -237,21 +222,12 @@ static UCS_CLASS_INIT_FUNC(uct_cuda_ipc_iface_t, uct_md_h md, uct_worker_h worke
             self->p2p_map[i][j] = -1;
         }
     }
-    status = UCT_CUDADRV_FUNC(cuDeviceGetCount(&dev_count));
-    if (UCS_OK != status) {
-        ucs_error("cuDeviceGetCount error");
-        goto err;
-    }
+    UCT_CUDADRV_FUNC(cuDeviceGetCount(&dev_count));
     self->device_count = dev_count;
     for (i = 0; i < dev_count; i++) {
-        for (j = 0; j < dev_count; j++) {
-            status = UCT_CUDADRV_FUNC(cuDeviceCanAccessPeer(&(self->p2p_map[i][j]),
-                                                            (CUdevice) i, (CUdevice) j));
-            if (UCS_OK != status) {
-                ucs_error("cuDeviceCanAccessPeer error(%d, %d)", i, j);
-                goto err;
-            }
-        }
+        for (j = 0; j < dev_count; j++)
+            UCT_CUDADRV_FUNC(cuDeviceCanAccessPeer(&(self->p2p_map[i][j]),
+                                                   (CUdevice) i, (CUdevice) j));
     }
     ucs_trace("cuda_ipc p2p map generated for %d devices", dev_count);
     self->config.max_poll = config->max_poll;
@@ -271,22 +247,15 @@ static UCS_CLASS_INIT_FUNC(uct_cuda_ipc_iface_t, uct_md_h md, uct_worker_h worke
     self->streams_initialized = 0;
     ucs_queue_head_init(&self->outstanding_d2d_event_q);
     return UCS_OK;
- err:
-    return UCS_ERR_IO_ERROR;
 }
 
 static UCS_CLASS_CLEANUP_FUNC(uct_cuda_ipc_iface_t)
 {
-    ucs_status_t status;
     int i;
 
     if (1 == self->streams_initialized) {
-        for (i = 0; i < self->device_count; i++) {
-            status = UCT_CUDADRV_FUNC(cuStreamDestroy(self->stream_d2d[i]));
-            if (UCS_OK != status) {
-                ucs_error("cuStreamDestroy d2d (lane %d) error", i);
-            }
-        }
+        for (i = 0; i < self->device_count; i++)
+            UCT_CUDADRV_FUNC(cuStreamDestroy(self->stream_d2d[i]));
         self->streams_initialized = 0;
     }
     uct_base_iface_progress_disable(&self->super.super,

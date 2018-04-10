@@ -38,18 +38,13 @@ static UCS_CLASS_CLEANUP_FUNC(uct_cuda_ipc_ep_t)
 {
     struct sglib_hashed_uct_cuda_ipc_rem_seg_t_iterator iter;
     uct_cuda_ipc_rem_seg_t *remote_seg;
-    ucs_status_t status;
 
     for (remote_seg = sglib_hashed_uct_cuda_ipc_rem_seg_t_it_init(&iter, self->rem_segments_hash);
          remote_seg != NULL;
          remote_seg = sglib_hashed_uct_cuda_ipc_rem_seg_t_it_next(&iter)) {
             sglib_hashed_uct_cuda_ipc_rem_seg_t_delete(self->rem_segments_hash,
                                                        remote_seg);
-            status = UCT_CUDADRV_FUNC(cuIpcCloseMemHandle(remote_seg->d_bptr));
-            if (UCS_OK != status) {
-                ucs_fatal("cuIpcCloseMemHandle failed. d_ptr :%p",
-                          (void *) remote_seg->d_bptr);
-            }
+            UCT_CUDADRV_FUNC(cuIpcCloseMemHandle(remote_seg->d_bptr));
             ucs_free(remote_seg);
     }
 }
@@ -76,7 +71,6 @@ void *uct_cuda_ipc_ep_attach_rem_seg(uct_cuda_ipc_ep_t *ep,
                                      uct_cuda_ipc_key_t *rkey)
 {
     uct_cuda_ipc_rem_seg_t *rem_seg, search;
-    ucs_status_t status;
 
     /* Are all other members of *search* zeroed out? or ignored?*/
     search.ph = rkey->ph;
@@ -89,12 +83,8 @@ void *uct_cuda_ipc_ep_attach_rem_seg(uct_cuda_ipc_ep_t *ep,
         rem_seg->ph      = rkey->ph;
         rem_seg->dev_num = rkey->dev_num;
         /* Attach memory to own GPU address space */
-        status = UCT_CUDADRV_FUNC(cuIpcOpenMemHandle((CUdeviceptr *) &rem_seg->d_bptr,
-                                                     rkey->ph,
-                                                     CU_IPC_MEM_LAZY_ENABLE_PEER_ACCESS));
-        if (UCS_OK != status) {
-            ucs_fatal("cuIpcOpenMemHandle failed");
-        }
+        UCT_CUDADRV_FUNC(cuIpcOpenMemHandle((CUdeviceptr *) &rem_seg->d_bptr, rkey->ph,
+                                            CU_IPC_MEM_LAZY_ENABLE_PEER_ACCESS));
         rem_seg->b_len = rkey->b_rem_len;
         /* put the base address into the ep's hash table */
         sglib_hashed_uct_cuda_ipc_rem_seg_t_add(ep->rem_segments_hash,
@@ -177,18 +167,9 @@ uct_cuda_ipc_post_cuda_async_copy(uct_ep_h tl_ep, void *dst, void *src,
         ucs_error("Failed to allocate cuda_ipc event object");
         return UCS_ERR_NO_MEMORY;
     }
-    status = UCT_CUDADRV_FUNC(cuMemcpyDtoDAsync((CUdeviceptr) dst,
-                                                (CUdeviceptr) src,
-                                                length, stream));
-    if (UCS_OK != status) {
-        ucs_error("cuMemcpyDtoD Failed");
-        return UCS_ERR_IO_ERROR;
-    }
-    status = UCT_CUDADRV_FUNC(cuEventRecord(cuda_ipc_event->event, stream));
-    if (UCS_OK != status) {
-        ucs_error("cuEventRecord Failed");
-        return UCS_ERR_IO_ERROR;
-    }
+    UCT_CUDADRV_FUNC(cuMemcpyDtoDAsync((CUdeviceptr) dst, (CUdeviceptr) src,
+                                       length, stream));
+    UCT_CUDADRV_FUNC(cuEventRecord(cuda_ipc_event->event, stream));
     ucs_queue_push(outstanding_queue, &cuda_ipc_event->queue);
     cuda_ipc_event->comp = comp;
     ucs_info("cuMemcpyDtoDAsync issued :%p dst:%p, src:%p  len:%ld",
