@@ -3,7 +3,6 @@
  * See file LICENSE for terms.
  *
  * Copyright (c) 2017-2018, NVIDIA CORPORATION. All rights reserved.
- * See COPYRIGHT for license information
  */
 
 #ifndef UCT_CUDA_IPC_IFACE_H
@@ -48,5 +47,4 @@ typedef struct uct_cuda_ipc_event_desc {
 
 
 ucs_status_t uct_cuda_ipc_iface_init_streams(uct_cuda_ipc_iface_t *iface);
-
 #endif

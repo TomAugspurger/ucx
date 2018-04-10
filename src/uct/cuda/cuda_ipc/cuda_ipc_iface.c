@@ -3,7 +3,6 @@
  * See file LICENSE for terms.
  *
  * Copyright (c) 2017-2018, NVIDIA CORPORATION. All rights reserved.
- * See COPYRIGHT for license information
  */
 
 #include "cuda_ipc_iface.h"
@@ -290,11 +289,8 @@ static ucs_status_t uct_cuda_ipc_query_tl_resources(uct_md_h md,
     return UCS_OK;
 }
 
-UCT_TL_COMPONENT_DEFINE(uct_cuda_ipc_tl,
-                        uct_cuda_ipc_query_tl_resources,
-                        uct_cuda_ipc_iface_t,
-                        UCT_CUDA_IPC_TL_NAME,
-                        "CUDA_IPC_",
-                        uct_cuda_ipc_iface_config_table,
+UCT_TL_COMPONENT_DEFINE(uct_cuda_ipc_tl, uct_cuda_ipc_query_tl_resources,
+                        uct_cuda_ipc_iface_t, UCT_CUDA_IPC_TL_NAME,
+                        "CUDA_IPC_", uct_cuda_ipc_iface_config_table,
                         uct_cuda_ipc_iface_config_t);
 UCT_MD_REGISTER_TL(&uct_cuda_ipc_md_component, &uct_cuda_ipc_tl);

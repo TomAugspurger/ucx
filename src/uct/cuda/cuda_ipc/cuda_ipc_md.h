@@ -3,7 +3,6 @@
  * See file LICENSE for terms.
  *
  * Copyright (c) 2017-2018, NVIDIA CORPORATION. All rights reserved.
- * See COPYRIGHT for license information
  */
 
 #ifndef UCT_CUDA_IPC_MD_H
@@ -71,12 +70,6 @@ typedef struct uct_cuda_ipc_key {
 } uct_cuda_ipc_key_t;
 
 
-#define UCT_CUDA_IPC_GET_DEVICE(cu_device)                              \
-    do {                                                                \
-        ucs_status_t status = UCT_CUDADRV_FUNC(cuCtxGetDevice(&cu_device)); \
-        if (UCS_OK != status) {                                         \
-            return UCS_ERR_IO_ERROR;                                    \
-        }                                                               \
-    } while(0);
+#define UCT_CUDA_IPC_GET_DEVICE(cu_device) UCT_CUDADRV_FUNC(cuCtxGetDevice(&cu_device));
 
 #endif

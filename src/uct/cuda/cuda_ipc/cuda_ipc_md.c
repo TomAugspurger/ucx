@@ -3,7 +3,6 @@
  * See file LICENSE for terms.
  *
  * Copyright (c) 2017-2018, NVIDIA CORPORATION. All rights reserved.
- * See COPYRIGHT for license information
  */
 
 #include "cuda_ipc_md.h"
@@ -102,8 +101,6 @@ uct_cuda_ipc_mem_reg_internal(uct_md_h uct_md, void *address, size_t length,
     ucs_trace("registered memory:%p..%p length:%lu d_ptr:%p dev_num:%d",
               address, address + length, length, address, (int) cu_device);
     return UCS_OK;
-err:
-    return UCS_ERR_IO_ERROR;
 }
 
 static ucs_status_t uct_cuda_ipc_mem_reg(uct_md_h md, void *address, size_t length,

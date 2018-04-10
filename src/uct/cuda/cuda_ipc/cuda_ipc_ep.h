@@ -3,7 +3,6 @@
  * See file LICENSE for terms.
  *
  * Copyright (c) 2017-2018, NVIDIA CORPORATION. All rights reserved.
- * See COPYRIGHT for license information
  */
 
 #ifndef UCT_CUDA_IPC_EP_H
@@ -44,6 +43,7 @@ typedef struct uct_cuda_ipc_ep {
 
 UCS_CLASS_DECLARE_NEW_FUNC(uct_cuda_ipc_ep_t, uct_ep_t, uct_iface_t*,
                            const uct_device_addr_t *, const uct_iface_addr_t *);
+
 UCS_CLASS_DECLARE_DELETE_FUNC(uct_cuda_ipc_ep_t, uct_ep_t);
 
 
@@ -80,12 +80,10 @@ uct_cuda_ipc_rem_seg_compare(uct_cuda_ipc_rem_seg_t *seg1,
                                     sizeof(CUipcMemHandle)));
 }
 
-SGLIB_DEFINE_LIST_PROTOTYPES(uct_cuda_ipc_rem_seg_t,
-                             uct_cuda_ipc_rem_seg_compare, next)
+SGLIB_DEFINE_LIST_PROTOTYPES(uct_cuda_ipc_rem_seg_t, uct_cuda_ipc_rem_seg_compare, next)
 
 
-SGLIB_DEFINE_HASHED_CONTAINER_PROTOTYPES(uct_cuda_ipc_rem_seg_t,
-                                         UCT_CUDA_IPC_HASH_SIZE,
+SGLIB_DEFINE_HASHED_CONTAINER_PROTOTYPES(uct_cuda_ipc_rem_seg_t, UCT_CUDA_IPC_HASH_SIZE,
                                          uct_cuda_ipc_rem_seg_hash)
 
 #endif
