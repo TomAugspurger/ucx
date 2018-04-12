@@ -286,6 +286,44 @@ UCS_TEST_P(test_md, mem_type_owned) {
     EXPECT_TRUE(ret > 0);
 }
 
+UCS_TEST_P(test_md, mem_type_owned_perf) {
+
+    static const unsigned count = 10000;
+    unsigned n = 0;
+    ucs_time_t start_time = ucs_get_time();
+    ucs_time_t end_time = start_time;
+    uct_md_attr_t md_attr;
+    ucs_status_t status;
+    int ret;
+    void *address;
+
+    status = uct_md_query(pd(), &md_attr);
+    ASSERT_UCS_OK(status);
+
+    if (md_attr.cap.mem_type == UCT_MD_MEM_TYPE_HOST) {
+        UCS_TEST_SKIP_R("MD owns only host memory");
+    }
+
+    alloc_memory(&address, 1024, NULL, md_attr.cap.mem_type);
+
+    while (n < count) {
+        ret = uct_md_is_mem_type_owned(pd(), address, 1024);
+        EXPECT_TRUE(ret > 0);
+
+        ++n;
+        end_time = ucs_get_time();
+
+        if (end_time - start_time > ucs_time_from_sec(1.0)) {
+            break;
+        }
+    }
+
+    UCS_TEST_MESSAGE << GetParam() << ": mem_type_owned cost for" <<
+        mem_types[md_attr.cap.mem_type] << " memory " <<
+        long(ucs_time_to_nsec(end_time - start_time) / n) << " ns";
+
+}
+
 UCS_TEST_P(test_md, reg) {
     size_t size;
     uct_md_attr_t md_attr;
@@ -528,6 +566,7 @@ UCS_TEST_P(test_md, sockaddr_accessibility) {
                    sysv, \
                    xpmem, \
                    cuda_cpy, \
+                   cuda_ipc, \
                    rocm, \
                    ib, \
                    ugni, \

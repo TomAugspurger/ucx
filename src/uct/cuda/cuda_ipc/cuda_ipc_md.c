@@ -95,7 +95,9 @@ uct_cuda_ipc_mem_reg_internal(uct_md_h uct_md, void *address, size_t length,
     CUdevice cu_device;
     ucs_status_t status;
 
-    if (!length) return UCS_OK;
+    if (!length) {
+        return UCS_OK;
+    }
     status = UCT_CUDADRV_FUNC(cuIpcGetMemHandle(&(mem_hndl->ph), (CUdeviceptr) address));
     if (UCS_OK != status) {
         return status;
