@@ -1,7 +1,6 @@
 /**
  * Copyright (C) Mellanox Technologies Ltd. 2018.  ALL RIGHTS RESERVED.
  * See file LICENSE for terms.
- *
  * Copyright (c) 2017-2018, NVIDIA CORPORATION. All rights reserved.
  */
 
@@ -168,24 +167,37 @@ static uct_iface_ops_t uct_cuda_ipc_iface_ops = {
 static void uct_cuda_ipc_event_desc_init(ucs_mpool_t *mp, void *obj, void *chunk)
 {
     uct_cuda_ipc_event_desc_t *base = (uct_cuda_ipc_event_desc_t *) obj;
+    ucs_status_t status;
 
     memset(base, 0 , sizeof(*base));
-    UCT_CUDADRV_FUNC(cuEventCreate(&(base->event), CU_EVENT_DISABLE_TIMING));
+    status = UCT_CUDADRV_FUNC(cuEventCreate(&(base->event), CU_EVENT_DISABLE_TIMING));
+    if (UCS_OK != status) {
+        return;
+    }
 }
 
 static void uct_cuda_ipc_event_desc_cleanup(ucs_mpool_t *mp, void *obj)
 {
     uct_cuda_ipc_event_desc_t *base = (uct_cuda_ipc_event_desc_t *) obj;
+    ucs_status_t status;
 
-    UCT_CUDADRV_FUNC(cuEventDestroy(base->event));
+    status = UCT_CUDADRV_FUNC(cuEventDestroy(base->event));
+    if (UCS_OK != status) {
+        return;
+    }
 }
 
 ucs_status_t uct_cuda_ipc_iface_init_streams(uct_cuda_ipc_iface_t *iface)
 {
+    ucs_status_t status;
     int i;
 
-    for (i = 0; i < iface->device_count; i++)
-        UCT_CUDADRV_FUNC(cuStreamCreate(&iface->stream_d2d[i], CU_STREAM_NON_BLOCKING));
+    for (i = 0; i < iface->device_count; i++) {
+        status = UCT_CUDADRV_FUNC(cuStreamCreate(&iface->stream_d2d[i], CU_STREAM_NON_BLOCKING));
+        if (UCS_OK != status) {
+            return status;
+        }
+    }
     iface->streams_initialized = 1;
 
     return UCS_OK;
@@ -221,12 +233,21 @@ static UCS_CLASS_INIT_FUNC(uct_cuda_ipc_iface_t, uct_md_h md, uct_worker_h worke
             self->p2p_map[i][j] = -1;
         }
     }
-    UCT_CUDADRV_FUNC(cuDeviceGetCount(&dev_count));
+    status = UCT_CUDADRV_FUNC(cuDeviceGetCount(&dev_count));
+    if (UCS_OK != status) {
+        return status;
+    }
+    ucs_assert(dev_count <= UCT_CUDA_IPC_MAX_PEERS);
+
     self->device_count = dev_count;
     for (i = 0; i < dev_count; i++) {
-        for (j = 0; j < dev_count; j++)
+        for (j = 0; j < dev_count; j++) {
             UCT_CUDADRV_FUNC(cuDeviceCanAccessPeer(&(self->p2p_map[i][j]),
                                                    (CUdevice) i, (CUdevice) j));
+            if (UCS_OK != status) {
+                return status;
+            }
+        }
     }
     ucs_trace("cuda_ipc p2p map generated for %d devices", dev_count);
     self->config.max_poll = config->max_poll;
@@ -240,7 +261,7 @@ static UCS_CLASS_INIT_FUNC(uct_cuda_ipc_iface_t, uct_md_h md, uct_worker_h worke
                             &uct_cuda_ipc_event_desc_mpool_ops,
                             "CUDA_IPC EVENT objects");
     if (UCS_OK != status) {
-        ucs_error("Mpool creation failed");
+        ucs_error("mpool creation failed");
         return UCS_ERR_IO_ERROR;
     }
     self->streams_initialized = 0;
@@ -250,11 +271,16 @@ static UCS_CLASS_INIT_FUNC(uct_cuda_ipc_iface_t, uct_md_h md, uct_worker_h worke
 
 static UCS_CLASS_CLEANUP_FUNC(uct_cuda_ipc_iface_t)
 {
+    ucs_status_t status;
     int i;
 
     if (1 == self->streams_initialized) {
-        for (i = 0; i < self->device_count; i++)
-            UCT_CUDADRV_FUNC(cuStreamDestroy(self->stream_d2d[i]));
+        for (i = 0; i < self->device_count; i++) {
+            status = UCT_CUDADRV_FUNC(cuStreamDestroy(self->stream_d2d[i]));
+            if (UCS_OK != status) {
+                return;
+            }
+        }
         self->streams_initialized = 0;
     }
     uct_base_iface_progress_disable(&self->super.super,

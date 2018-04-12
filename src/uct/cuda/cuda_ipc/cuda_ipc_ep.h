@@ -1,7 +1,6 @@
 /**
  * Copyright (C) Mellanox Technologies Ltd. 2018.  ALL RIGHTS RESERVED.
  * See file LICENSE for terms.
- *
  * Copyright (c) 2017-2018, NVIDIA CORPORATION. All rights reserved.
  */
 
@@ -12,12 +11,11 @@
 #include <uct/base/uct_iface.h>
 #include <ucs/type/class.h>
 #include "cuda_ipc_md.h"
-#include <ucs/datastruct/sglib.h>
-#include <ucs/datastruct/sglib_wrapper.h>
 
 
 #define UCT_CUDA_IPC_HASH_SIZE 256
-
+#define UCT_CUDA_IPC_PUT 0
+#define UCT_CUDA_IPC_GET 1
 
 typedef struct uct_cuda_ipc_rem_seg  uct_cuda_ipc_rem_seg_t;
 

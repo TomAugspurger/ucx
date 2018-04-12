@@ -1,7 +1,6 @@
 /**
  * Copyright (C) Mellanox Technologies Ltd. 2018.  ALL RIGHTS RESERVED.
  * See file LICENSE for terms.
- *
  * Copyright (c) 2017-2018, NVIDIA CORPORATION. All rights reserved.
  */
 
@@ -29,7 +28,7 @@ const char                *cu_err_str;
  * @brief cuda ipc MD descriptor
  */
 typedef struct uct_cuda_ipc_md {
-    struct uct_md       super;   /**< Domain info */
+    struct uct_md       super;    /**< Domain info */
     uct_linear_growth_t reg_cost; /* Memory registration cost */
 } uct_cuda_ipc_md_t;
 
@@ -68,8 +67,5 @@ typedef struct uct_cuda_ipc_key {
     CUdeviceptr    d_mapped_ptr; /* Mapped GPU address */
     int            dev_num;      /* GPU Device number */
 } uct_cuda_ipc_key_t;
-
-
-#define UCT_CUDA_IPC_GET_DEVICE(cu_device) UCT_CUDADRV_FUNC(cuCtxGetDevice(&cu_device));
 
 #endif

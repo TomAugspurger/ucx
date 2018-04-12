@@ -1,7 +1,6 @@
 /**
  * Copyright (C) Mellanox Technologies Ltd. 2018.  ALL RIGHTS RESERVED.
  * See file LICENSE for terms.
- *
  * Copyright (c) 2017-2018, NVIDIA CORPORATION. All rights reserved.
  */
 

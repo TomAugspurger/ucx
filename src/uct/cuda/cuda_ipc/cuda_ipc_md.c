@@ -60,9 +60,14 @@ static ucs_status_t uct_cuda_ipc_rkey_unpack(uct_md_component_t *mdc,
 {
     uct_cuda_ipc_key_t *packed = (uct_cuda_ipc_key_t *) rkey_buffer;
     uct_cuda_ipc_key_t *key;
+    ucs_status_t status;
     CUdevice cu_device;
 
-    UCT_CUDA_IPC_GET_DEVICE(cu_device);
+    status = UCT_CUDADRV_FUNC(cuCtxGetDevice(&cu_device));
+    if (UCS_OK != status) {
+        return status;
+    }
+
     key = ucs_malloc(sizeof(uct_cuda_ipc_key_t), "uct_cuda_ipc_key_t");
     if (NULL == key) {
         ucs_error("failed to allocate memory for uct_cuda_ipc_key_t");
@@ -88,11 +93,21 @@ uct_cuda_ipc_mem_reg_internal(uct_md_h uct_md, void *address, size_t length,
                               unsigned flags, uct_cuda_ipc_mem_t *mem_hndl)
 {
     CUdevice cu_device;
+    ucs_status_t status;
 
     if (!length) return UCS_OK;
-    UCT_CUDADRV_FUNC(cuIpcGetMemHandle(&(mem_hndl->ph), (CUdeviceptr) address));
+    status = UCT_CUDADRV_FUNC(cuIpcGetMemHandle(&(mem_hndl->ph), (CUdeviceptr) address));
+    if (UCS_OK != status) {
+        return status;
+    }
+
     /* TODO: There are limitations when process has >1 contexts */
-    UCT_CUDA_IPC_GET_DEVICE(cu_device);
+
+    status = UCT_CUDADRV_FUNC(cuCtxGetDevice(&cu_device));
+    if (UCS_OK != status) {
+        return status;
+    }
+
     UCT_CUDADRV_FUNC(cuMemGetAddressRange(&(mem_hndl->d_bptr), &(mem_hndl->b_len),
                                           (CUdeviceptr) address));
     mem_hndl->d_ptr    = (CUdeviceptr) address;
