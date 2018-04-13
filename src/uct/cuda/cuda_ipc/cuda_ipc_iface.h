@@ -1,7 +1,7 @@
 /**
  * Copyright (C) Mellanox Technologies Ltd. 2018.  ALL RIGHTS RESERVED.
+ * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  * See file LICENSE for terms.
- * Copyright (c) 2017-2018, NVIDIA CORPORATION. All rights reserved.
  */
 
 #ifndef UCT_CUDA_IPC_IFACE_H
