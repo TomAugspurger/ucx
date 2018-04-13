@@ -21,9 +21,6 @@
 extern uct_md_component_t uct_cuda_ipc_md_component;
 
 
-const char                *cu_err_str;
-
-
 /**
  * @brief cuda ipc MD descriptor
  */
