@@ -116,8 +116,11 @@ uct_cuda_ipc_progress_event_queue(ucs_queue_head_t *event_queue, unsigned max_ev
 
     ucs_queue_for_each_safe(cuda_ipc_event, iter, event_queue, queue) {
         status = UCT_CUDADRV_FUNC(cuEventQuery(cuda_ipc_event->event));
-        if (UCS_OK != status) {
+        if (UCS_INPROGRESS == status) {
             break;
+        }
+        else if (UCS_OK != status) {
+            return status;
         }
         ucs_queue_del_iter(event_queue, iter);
         if (cuda_ipc_event->comp != NULL) {
