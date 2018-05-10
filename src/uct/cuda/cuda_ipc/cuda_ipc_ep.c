@@ -50,6 +50,7 @@ void *uct_cuda_ipc_ep_attach_rem_seg(uct_cuda_ipc_ep_t *ep,
 {
     unsigned int cuda_ipc_mh_flags = CU_IPC_MEM_LAZY_ENABLE_PEER_ACCESS;
     uct_cuda_ipc_rem_seg_t *rem_seg, search;
+    ucs_status_t status;
 
     search.ph = rkey->ph;
     /* TODO: Address the case when va matches but not memhandle
@@ -58,10 +59,10 @@ void *uct_cuda_ipc_ep_attach_rem_seg(uct_cuda_ipc_ep_t *ep,
        cudaMalloc(&ptrX ...); mhX = getmemhandle(ptrX, ...); cudafree(ptrX);
        cudaMalloc(&ptrY ...); mhY = getmemhandle(ptrX, ...);
        Now: ptrX can be ptrY but mhX is never mhY
-     */
+    */
     rem_seg =
-	sglib_hashed_uct_cuda_ipc_rem_seg_t_find_member(ep->rem_segments_hash,
-							&search);
+        sglib_hashed_uct_cuda_ipc_rem_seg_t_find_member(ep->rem_segments_hash,
+                                                        &search);
     if (rem_seg == NULL) {
         rem_seg = ucs_malloc(sizeof(*rem_seg), "rem_seg");
         if (rem_seg == NULL) {
@@ -71,9 +72,10 @@ void *uct_cuda_ipc_ep_attach_rem_seg(uct_cuda_ipc_ep_t *ep,
         rem_seg->ph      = rkey->ph;
         rem_seg->dev_num = rkey->dev_num;
 
-        if (UCS_OK !=
-            UCT_CUDADRV_FUNC(cuIpcOpenMemHandle((CUdeviceptr *) &rem_seg->d_bptr,
-                                                rkey->ph, cuda_ipc_mh_flags))) {
+        status =
+            UCT_CUDADRV_FUNC(cuIpcOpenMemHandle((CUdeviceptr *)&rem_seg->d_bptr,
+                                                rkey->ph, cuda_ipc_mh_flags));
+        if (UCS_OK != status) {
             ucs_error("cuIpcOpenMemHandle failed\n");
             return NULL;
         }
