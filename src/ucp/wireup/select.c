@@ -978,6 +978,41 @@ static ucs_status_t ucp_wireup_add_bw_lanes(ucp_ep_h ep,
         }
     }
 
+    /* If there are mem_type rma_bw_lanes then add them */
+    unsigned i, mem_type, md_index;
+
+    if ((bw_info->criteria.local_md_flags == UCT_MD_FLAG_REG) &&
+        (bw_info->criteria.remote_md_flags == UCT_MD_FLAG_REG)) {
+        for (i = 0; i < context->num_mem_type_mds; ++i) {
+            md_index = context->mem_type_tl_mds[i];
+            mem_type = context->tl_mds[md_index].attr.cap.mem_type;
+            status = ucp_wireup_select_transport(ep, address_list, address_count,
+                                                 &bw_info->criteria,
+                                                 context->mem_type_tls[mem_type],
+                                                 -1, local_dev_bitmap,
+                                                 remote_dev_bitmap,
+                                                 0, &rsc_index, &addr_index,
+                                                 &score);
+            if (status != UCS_OK) {
+                break;
+            }
+
+            is_proxy = allow_proxy &&
+                ucp_wireup_is_lane_proxy(ep, rsc_index,
+                                         address_list[addr_index].iface_attr.cap_flags);
+
+            ucp_wireup_add_lane_desc(lane_descs, num_lanes_p, rsc_index,
+                                     addr_index,
+                                     address_list[addr_index].md_index, score,
+                                     bw_info->usage, is_proxy);
+            md_map |= UCS_BIT(context->tl_rscs[rsc_index].md_index);
+            num_lanes++;
+
+            local_dev_bitmap  &= ~UCS_BIT(context->tl_rscs[rsc_index].dev_index);
+            remote_dev_bitmap &= ~UCS_BIT(address_list[addr_index].dev_index);
+        }
+    }
+
     return UCS_OK;
 }
 

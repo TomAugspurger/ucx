@@ -891,10 +891,26 @@ err:
 }
 
 static ucs_status_t
-ucp_perf_test_alloc_cuda(void **addr, size_t length)
+ucp_perf_test_alloc_cuda(ucx_perf_context_t *perf, void **addr, size_t length)
 {
 #if HAVE_CUDA
     cudaError_t cerr;
+    unsigned group_index;
+    int num_cuda_devices;
+    int cuda_device_index;
+
+    group_index = rte_call(perf, group_index);
+
+    cerr = cudaGetDeviceCount(&num_cuda_devices);
+    if (cerr != cudaSuccess) {
+        return UCS_ERR_NO_MEMORY;
+    }
+    cuda_device_index = group_index % num_cuda_devices;
+
+    cerr = cudaSetDevice(cuda_device_index);
+    if (cerr != cudaSuccess) {
+        return UCS_ERR_NO_MEMORY;
+    }
 
     cerr = cudaMalloc(addr, length);
     if (cerr != cudaSuccess) {
@@ -913,7 +929,7 @@ ucp_perf_test_alloc_contig(ucx_perf_context_t *perf, ucx_perf_params_t *params,
         return ucp_perf_test_alloc_host(perf, params, addr, length, memh,
                                         check_non_blk_flag);
     } else if (perf->params.mem_type == UCT_MD_MEM_TYPE_CUDA) {
-        return ucp_perf_test_alloc_cuda(addr, length);
+        return ucp_perf_test_alloc_cuda(perf, addr, length);
     }
 
     return UCS_ERR_UNSUPPORTED;

@@ -352,6 +352,35 @@ static ucp_lane_index_t ucp_config_find_rma_lane(ucp_context_h context,
     uint8_t rkey_index;
     int prio;
 
+    if (mem_type != UCT_MD_MEM_TYPE_HOST) {
+        for (prio = 0; prio < UCP_MAX_LANES; ++prio) {
+            lane = lanes[prio];
+            if (lane == UCP_NULL_LANE) {
+                return UCP_NULL_LANE; /* No more lanes */
+            } else if (ignore & UCS_BIT(lane)) {
+                continue; /* lane is in ignore mask, do not process it */
+            }
+
+            md_index = config->md_index[lane];
+            if ((md_index != UCP_NULL_RESOURCE) &&
+                (context->tl_mds[md_index].attr.cap.reg_mem_types &
+                 UCS_BIT(mem_type))
+                && (context->tl_mds[md_index].attr.cap.mem_type == mem_type)) {
+
+                dst_md_index = config->key.lanes[lane].dst_md_index;
+                dst_md_mask  = UCS_BIT(dst_md_index);
+
+                if (rkey->md_map & dst_md_mask) {
+                    /* Return first matching lane */
+                    rkey_index  = ucs_count_one_bits(rkey->md_map & (dst_md_mask - 1));
+                    *uct_rkey_p = rkey->uct[rkey_index].rkey;
+                    //printf("mem_type bw lane available lane = %d\n", lane);
+                    return lane;
+                }
+            }
+        }
+    }
+
     for (prio = 0; prio < UCP_MAX_LANES; ++prio) {
         lane = lanes[prio];
         if (lane == UCP_NULL_LANE) {
