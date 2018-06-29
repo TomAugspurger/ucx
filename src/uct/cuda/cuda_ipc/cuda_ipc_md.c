@@ -99,17 +99,19 @@ uct_cuda_ipc_mem_reg_internal(uct_md_h uct_md, void *addr, size_t length,
         return UCS_OK;
     }
 
-    status = UCT_CUDADRV_FUNC(cuIpcGetMemHandle(&(key->ph), (CUdeviceptr) addr));
-    if (UCS_OK != status) {
-        return status;
-    }
-
     UCT_CUDA_IPC_GET_DEVICE(cu_device);
 
     UCT_CUDADRV_FUNC(cuMemGetAddressRange(&(key->d_bptr),
                                           &(key->b_len),
                                           (CUdeviceptr) addr));
     key->dev_num  = (int) cu_device;
+
+    status = UCT_CUDADRV_FUNC(cuIpcGetMemHandle(&(key->ph),
+                                                (CUdeviceptr) key->d_bptr));
+    if (UCS_OK != status) {
+        return status;
+    }
+
     ucs_trace("registered memory:%p..%p length:%lu dev_num:%d",
               addr, addr + length, length, (int) cu_device);
     return UCS_OK;

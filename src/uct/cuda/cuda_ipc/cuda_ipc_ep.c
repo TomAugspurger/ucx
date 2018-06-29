@@ -30,10 +30,10 @@ static UCS_CLASS_INIT_FUNC(uct_cuda_ipc_ep_t, uct_iface_t *tl_iface,
 
 static UCS_CLASS_CLEANUP_FUNC(uct_cuda_ipc_ep_t)
 {
-    CUdeviceptr dptr;
+    uct_cuda_ipc_hash_val_t kh_hash_val;
 
-    kh_foreach_value(&self->memh_hash, dptr,
-                     UCT_CUDADRV_FUNC(cuIpcCloseMemHandle(dptr)));
+    kh_foreach_value(&self->memh_hash, kh_hash_val,
+                     UCT_CUDADRV_FUNC(cuIpcCloseMemHandle(kh_hash_val.dptr)));
     kh_destroy_inplace(uct_cuda_ipc_memh_hash, &self->memh_hash);
 }
 
@@ -50,13 +50,14 @@ void *uct_cuda_ipc_ep_attach_rem_seg(uct_cuda_ipc_ep_t *ep,
                                      uct_cuda_ipc_key_t *rkey)
 {
     unsigned int cuda_ipc_mh_flags = CU_IPC_MEM_LAZY_ENABLE_PEER_ACCESS;
+    uct_cuda_ipc_hash_val_t kh_hash_val;
     ucs_status_t status;
     CUdeviceptr dptr;
     khiter_t hash_it;
     int ret;
 
     hash_it = kh_put(uct_cuda_ipc_memh_hash, &ep->memh_hash,
-                     rkey->ph, &ret);
+                     rkey->d_bptr, &ret);
     if (ret > 0) {
         /* memhandle not found */
         status = UCT_CUDADRV_FUNC(cuIpcOpenMemHandle(&dptr, rkey->ph,
@@ -65,10 +66,35 @@ void *uct_cuda_ipc_ep_attach_rem_seg(uct_cuda_ipc_ep_t *ep,
             kh_del(uct_cuda_ipc_memh_hash, &ep->memh_hash, hash_it);
             return NULL;
         }
-        kh_value(&ep->memh_hash, hash_it) = (CUdeviceptr)dptr;
+
+        kh_hash_val.dptr = dptr;
+        kh_hash_val.mem_handle = rkey->ph;
+        kh_value(&ep->memh_hash, hash_it) = kh_hash_val;
     }
     else {
-        dptr = (CUdeviceptr)kh_value(&ep->memh_hash, hash_it);
+        kh_hash_val = (uct_cuda_ipc_hash_val_t) kh_value(&ep->memh_hash, hash_it);
+
+        if (!memcmp((const void *)&(kh_hash_val.mem_handle),
+                   (const void *)&(rkey->ph), sizeof(rkey->ph))) {
+            status = UCT_CUDADRV_FUNC(cuIpcCloseMemHandle(kh_hash_val.dptr));
+            if (UCS_OK != status) {
+                kh_del(uct_cuda_ipc_memh_hash, &ep->memh_hash, hash_it);
+                return NULL;
+            }
+
+            status = UCT_CUDADRV_FUNC(cuIpcOpenMemHandle(&dptr, rkey->ph,
+                                                         cuda_ipc_mh_flags));
+            if (UCS_OK != status) {
+                kh_del(uct_cuda_ipc_memh_hash, &ep->memh_hash, hash_it);
+                return NULL;
+            }
+
+            kh_hash_val.dptr = dptr;
+            kh_hash_val.mem_handle = rkey->ph;
+            kh_value(&ep->memh_hash, hash_it) = kh_hash_val;
+        }
+
+        dptr = kh_hash_val.dptr;
     }
 
     return (void *)dptr;
