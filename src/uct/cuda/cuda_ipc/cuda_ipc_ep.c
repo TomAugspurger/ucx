@@ -74,7 +74,7 @@ void *uct_cuda_ipc_ep_attach_rem_seg(uct_cuda_ipc_ep_t *ep,
     else {
         kh_hash_val = (uct_cuda_ipc_hash_val_t) kh_value(&ep->memh_hash, hash_it);
 
-        if (!memcmp((const void *)&(kh_hash_val.mem_handle),
+        if (memcmp((const void *)&(kh_hash_val.mem_handle),
                    (const void *)&(rkey->ph), sizeof(rkey->ph))) {
             status = UCT_CUDADRV_FUNC(cuIpcCloseMemHandle(kh_hash_val.dptr));
             if (UCS_OK != status) {
