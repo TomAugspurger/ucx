@@ -21,22 +21,16 @@ struct uct_cuda_ipc_rem_seg {
     int                    dev_num;    /* GPU Device number */
 };
 
-static inline khint_t uct_cuda_ipc_memh_hash_func(CUipcMemHandle seg)
-{
-    int hash_val = 7;
-    int i;
+typedef struct uct_cuda_ipc_hash_val {
+    CUipcMemHandle mem_handle;
+    CUdeviceptr    dptr;
+} uct_cuda_ipc_hash_val_t;
 
-    for (i = 0; i < sizeof(seg); i++) {
-        hash_val = (hash_val * 31) + seg.reserved[i];
-    }
+#define uct_cuda_ipc_memh_hash_func(_ptr)  kh_int64_hash_func((uintptr_t)(_ptr))
 
-    return hash_val;
-}
+#define uct_cuda_ipc_memh_hash_equal(_sg1, _sg2) ((_sg1) == (_sg2))
 
-#define uct_cuda_ipc_memh_hash_equal(_sg1, _sg2)                        \
-    !strncmp((const char *) &(_sg1), (const char *) &(_sg2), sizeof(CUipcMemHandle))
-
-KHASH_INIT(uct_cuda_ipc_memh_hash, CUipcMemHandle, CUdeviceptr, 1,
+KHASH_INIT(uct_cuda_ipc_memh_hash, CUdeviceptr, uct_cuda_ipc_hash_val_t, 1,
            uct_cuda_ipc_memh_hash_func, uct_cuda_ipc_memh_hash_equal);
 
 typedef struct uct_cuda_ipc_ep_addr {
