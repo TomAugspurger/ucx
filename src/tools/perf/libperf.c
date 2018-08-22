@@ -1118,7 +1118,6 @@ static int start_server(ucp_worker_h ucp_worker, ucp_peer_t *context,
     if (status != UCS_OK) {
         fprintf(stderr, "failed to listen (%s)\n", ucs_status_string(status));
     }
-    printf("server up\n");
 
     return status;
 }
@@ -1134,7 +1133,6 @@ static int start_client(ucp_worker_h ucp_worker, const char *ip,
     struct sockaddr_in connect_addr;
     ucs_status_t status;
 
-    printf("server ip = %s\n", ip);
     set_connect_addr(ip, &connect_addr);
     ucs_assert(client_ep != NULL);
 
@@ -1284,7 +1282,7 @@ static ucs_status_t ucp_perf_test_setup_endpoints(ucx_perf_context_t *perf,
         perf->ucp.peers[!group_index].remote_addr = remote_info->recv_buffer;
 
         if (group_index) {
-            sleep(5);
+            rte_call(perf, barrier);
             status = start_client(perf->ucp.worker, perf->params.server_addr,
                                   &perf->ucp.peers[!group_index].ep);
             if (status != UCS_OK) {
@@ -1297,6 +1295,7 @@ static ucs_status_t ucp_perf_test_setup_endpoints(ucx_perf_context_t *perf,
             status = start_server(perf->ucp.worker,
                                   &perf->ucp.peers[!group_index],
                                   &perf->ucp.listener);
+            rte_call(perf, barrier);
             if (status != UCS_OK) {
                 fprintf(stderr, "failed to start server\n");
                 goto err_free_buffer;
@@ -1305,7 +1304,6 @@ static ucs_status_t ucp_perf_test_setup_endpoints(ucx_perf_context_t *perf,
                 ucp_worker_progress(perf->ucp.worker);
             }
         }
-        printf("past connection\n");
 
         if (remote_info->rkey_size > 0) {
             status = ucp_ep_rkey_unpack(perf->ucp.peers[!group_index].ep, rkey_buffer,
