@@ -76,7 +76,7 @@ struct perftest_context {
     sock_rte_group_t             sock_rte_group;
 };
 
-#define TEST_PARAMS_ARGS   "t:n:s:W:O:w:D:i:H:oSCqMr:T:d:x:A:BUm:"
+#define TEST_PARAMS_ARGS   "t:n:s:W:O:w:D:i:H:oSCqMre:T:d:x:a:A:BUm:"
 
 
 test_type_t tests[] = {
@@ -360,6 +360,9 @@ static void usage(const struct perftest_context *ctx, const char *program)
 #if HAVE_CUDA
     printf("                        cuda - NVIDIA GPU memory\n");
 #endif
+    printf("     -e <endpoint type>  EP type for connection\n");
+    printf("                        regular     - exchange ucp_worker_addr(default)\n");
+    printf("                        server_client - exchange IP\n");
     printf("     -h             show this help message\n");
     printf("\n");
     printf("  Output format:\n");
@@ -486,10 +489,12 @@ static void init_test_params(ucx_perf_params_t *params)
     params->uct.fc_window   = UCT_PERF_TEST_MAX_FC_WINDOW;
     params->uct.data_layout = UCT_PERF_DATA_LAYOUT_SHORT;
     params->mem_type        = UCT_MD_MEM_TYPE_HOST;
+    params->ep_type         = UCP_PERF_EP_REGULAR;
     params->msg_size_cnt    = 1;
     params->iov_stride      = 0;
     params->ucp.send_datatype = UCP_PERF_DATATYPE_CONTIG;
     params->ucp.recv_datatype = UCP_PERF_DATATYPE_CONTIG;
+    strcpy(params->server_addr, "<none>");
     strcpy(params->uct.dev_name, "<none>");
     strcpy(params->uct.tl_name, "<none>");
 
@@ -507,6 +512,9 @@ static ucs_status_t parse_test_params(ucx_perf_params_t *params, char opt, const
     case 'd':
         ucs_snprintf_zero(params->uct.dev_name, sizeof(params->uct.dev_name),
                           "%s", optarg);
+        return UCS_OK;
+    case 'a':
+        ucs_snprintf_zero(params->server_addr, 256, "%s", optarg);
         return UCS_OK;
     case 'x':
         ucs_snprintf_zero(params->uct.tl_name, sizeof(params->uct.tl_name),
@@ -632,6 +640,15 @@ static ucs_status_t parse_test_params(ucx_perf_params_t *params, char opt, const
             ucs_error("not built with cuda support");
             return UCS_ERR_INVALID_PARAM;
 #endif
+        }
+        return UCS_ERR_INVALID_PARAM;
+    case 'e':
+        if (!strcmp(optarg, "regular")) {
+            params->ep_type         = UCP_PERF_EP_REGULAR;
+            return UCS_OK;
+        } else if (!strcmp(optarg, "server_client")) {
+            params->ep_type         = UCP_PERF_EP_SERVER_CLIENT;
+            return UCS_OK;
         }
         return UCS_ERR_INVALID_PARAM;
     default:

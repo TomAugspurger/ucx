@@ -19,6 +19,7 @@ BEGIN_C_DECLS
 
 #define TIMING_QUEUE_SIZE    2048
 #define UCT_PERF_TEST_AM_ID  5
+#define SERVER_PORT          13342
 
 
 typedef struct ucx_perf_context  ucx_perf_context_t;
@@ -66,6 +67,7 @@ struct ucx_perf_context {
             ucp_context_h        context;
             ucp_worker_h         worker;
             ucp_peer_t           *peers;
+            ucp_listener_h       listener;
             ucp_mem_h            send_memh;
             ucp_mem_h            recv_memh;
             ucp_dt_iov_t         *send_iov;

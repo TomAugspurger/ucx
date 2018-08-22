@@ -1058,6 +1058,116 @@ static ucs_status_t ucp_perf_test_exchange_status(ucx_perf_context_t *perf,
     return collective_status;
 }
 
+/**
+ * The callback on the server side which is invoked upon receiving a connection
+ * request from the client.
+ */
+static void server_accept_cb(ucp_ep_h ep, void *arg)
+{
+    ucp_peer_t *context = arg;
+
+    /* Save the server's endpoint in the user's context, for future usage */
+    context->ep = ep;
+}
+
+/**
+ * Set an address for the server to listen on - INADDR_ANY on a well known port.
+ */
+void set_listen_addr(struct sockaddr_in *listen_addr)
+{
+    /* The server will listen on INADDR_ANY */
+    memset(listen_addr, 0, sizeof(struct sockaddr_in));
+    listen_addr->sin_family      = AF_INET;
+    listen_addr->sin_addr.s_addr = INADDR_ANY;
+    listen_addr->sin_port        = SERVER_PORT;
+}
+
+/**
+ * Set an address to connect to. A given IP address on a well known port.
+ */
+void set_connect_addr(const char *address_str, struct sockaddr_in *connect_addr)
+{
+    memset(connect_addr, 0, sizeof(struct sockaddr_in));
+    connect_addr->sin_family      = AF_INET;
+    connect_addr->sin_addr.s_addr = inet_addr(address_str);
+    connect_addr->sin_port        = SERVER_PORT;
+}
+
+/**
+ * Initialize the server side. The server starts listening on the set address
+ * and waits for its connected endpoint to be created.
+ */
+static int start_server(ucp_worker_h ucp_worker, ucp_peer_t *context,
+                        ucp_listener_h *listener)
+{
+    struct sockaddr_in listen_addr;
+    ucp_listener_params_t params;
+    ucs_status_t status;
+
+    set_listen_addr(&listen_addr);
+
+    params.field_mask         = UCP_LISTENER_PARAM_FIELD_SOCK_ADDR |
+                                UCP_LISTENER_PARAM_FIELD_ACCEPT_HANDLER;
+    params.sockaddr.addr      = (const struct sockaddr*)&listen_addr;
+    params.sockaddr.addrlen   = sizeof(listen_addr);
+    params.accept_handler.cb  = server_accept_cb;
+    params.accept_handler.arg = context;
+
+    /* Create a listener on the server side to listen on the given address.*/
+    status = ucp_listener_create(ucp_worker, &params, listener);
+    if (status != UCS_OK) {
+        fprintf(stderr, "failed to listen (%s)\n", ucs_status_string(status));
+    }
+    printf("server up\n");
+
+    return status;
+}
+
+/**
+ * Initialize the client side. Create an endpoint from the client side to be
+ * connected to the remote server (to the given IP).
+ */
+static int start_client(ucp_worker_h ucp_worker, const char *ip,
+                        ucp_ep_h *client_ep)
+{
+    ucp_ep_params_t ep_params;
+    struct sockaddr_in connect_addr;
+    ucs_status_t status;
+
+    printf("server ip = %s\n", ip);
+    set_connect_addr(ip, &connect_addr);
+    ucs_assert(client_ep != NULL);
+
+    /*
+     * Endpoint field mask bits:
+     * UCP_EP_PARAM_FIELD_FLAGS             - Use the value of the 'flags' field.
+     * UCP_EP_PARAM_FIELD_SOCK_ADDR         - Use a remote sockaddr to connect
+     *                                        to the remote peer.
+     * UCP_EP_PARAM_FIELD_ERR_HANDLING_MODE - Error handling mode - this flag
+     *                                        is temporarily required since the
+     *                                        endpoint will be closed with
+     *                                        UCP_EP_CLOSE_MODE_FORCE which
+     *                                        requires this mode.
+     *                                        Once UCP_EP_CLOSE_MODE_FORCE is
+     *                                        removed, the error handling mode
+     *                                        will be removed.
+     */
+    ep_params.field_mask       = UCP_EP_PARAM_FIELD_FLAGS     |
+                                 UCP_EP_PARAM_FIELD_SOCK_ADDR |
+                                 UCP_EP_PARAM_FIELD_ERR_HANDLING_MODE;
+    ep_params.err_mode         = UCP_ERR_HANDLING_MODE_PEER;
+    ep_params.flags            = UCP_EP_PARAMS_FLAGS_CLIENT_SERVER;
+    ep_params.sockaddr.addr    = (struct sockaddr*)&connect_addr;
+    ep_params.sockaddr.addrlen = sizeof(connect_addr);
+
+    status = ucp_ep_create(ucp_worker, &ep_params, client_ep);
+    if (status != UCS_OK) {
+        fprintf(stderr, "failed to connect to %s (%s)\n", ip, ucs_status_string(status));
+    }
+
+    return status;
+}
+
 static ucs_status_t ucp_perf_test_setup_endpoints(ucx_perf_context_t *perf,
                                                   uint64_t features)
 {
@@ -1127,32 +1237,79 @@ static ucs_status_t ucp_perf_test_setup_endpoints(ucx_perf_context_t *perf,
         goto err_destroy_eps;
     }
 
-    for (i = 0; i < group_size; ++i) {
-        if (i == group_index) {
-            continue;
-        }
+    if (perf->params.ep_type == UCP_PERF_EP_REGULAR) {
+        for (i = 0; i < group_size; ++i) {
+            if (i == group_index) {
+                continue;
+            }
 
-        rte_call(perf, recv, i, buffer, buffer_size, req);
+            rte_call(perf, recv, i, buffer, buffer_size, req);
+
+            remote_info = buffer;
+            address     = (void*)(remote_info + 1);
+            rkey_buffer = (void*)address + remote_info->ucp.addr_len;
+            perf->ucp.peers[i].remote_addr = remote_info->recv_buffer;
+
+            ep_params.field_mask = UCP_EP_PARAM_FIELD_REMOTE_ADDRESS;
+            ep_params.address    = address;
+
+            status = ucp_ep_create(perf->ucp.worker, &ep_params, &perf->ucp.peers[i].ep);
+            if (status != UCS_OK) {
+                if (perf->params.flags & UCX_PERF_TEST_FLAG_VERBOSE) {
+                    ucs_error("ucp_ep_create() failed: %s", ucs_status_string(status));
+                }
+                goto err_free_buffer;
+            }
+
+            if (remote_info->rkey_size > 0) {
+                status = ucp_ep_rkey_unpack(perf->ucp.peers[i].ep, rkey_buffer,
+                                            &perf->ucp.peers[i].rkey);
+                if (status != UCS_OK) {
+                    if (perf->params.flags & UCX_PERF_TEST_FLAG_VERBOSE) {
+                        ucs_fatal("ucp_rkey_unpack() failed: %s", ucs_status_string(status));
+                    }
+                    goto err_free_buffer;
+                }
+            } else {
+                perf->ucp.peers[i].rkey = NULL;
+            }
+        }
+    } else {
+
+        rte_call(perf, recv, !group_index, buffer, buffer_size, req);
 
         remote_info = buffer;
         address     = (void*)(remote_info + 1);
         rkey_buffer = (void*)address + remote_info->ucp.addr_len;
-        perf->ucp.peers[i].remote_addr = remote_info->recv_buffer;
+        perf->ucp.peers[!group_index].remote_addr = remote_info->recv_buffer;
 
-        ep_params.field_mask = UCP_EP_PARAM_FIELD_REMOTE_ADDRESS;
-        ep_params.address    = address;
-
-        status = ucp_ep_create(perf->ucp.worker, &ep_params, &perf->ucp.peers[i].ep);
-        if (status != UCS_OK) {
-            if (perf->params.flags & UCX_PERF_TEST_FLAG_VERBOSE) {
-                ucs_error("ucp_ep_create() failed: %s", ucs_status_string(status));
+        if (group_index) {
+            sleep(5);
+            status = start_client(perf->ucp.worker, perf->params.server_addr,
+                                  &perf->ucp.peers[!group_index].ep);
+            if (status != UCS_OK) {
+                fprintf(stderr, "failed to start client\n");
+                goto err_free_buffer;
             }
-            goto err_free_buffer;
+        } else {
+            perf->ucp.peers[!group_index].ep = NULL;
+
+            status = start_server(perf->ucp.worker,
+                                  &perf->ucp.peers[!group_index],
+                                  &perf->ucp.listener);
+            if (status != UCS_OK) {
+                fprintf(stderr, "failed to start server\n");
+                goto err_free_buffer;
+            }
+            while (perf->ucp.peers[!group_index].ep == NULL) {
+                ucp_worker_progress(perf->ucp.worker);
+            }
         }
+        printf("past connection\n");
 
         if (remote_info->rkey_size > 0) {
-            status = ucp_ep_rkey_unpack(perf->ucp.peers[i].ep, rkey_buffer,
-                                        &perf->ucp.peers[i].rkey);
+            status = ucp_ep_rkey_unpack(perf->ucp.peers[!group_index].ep, rkey_buffer,
+                                        &perf->ucp.peers[!group_index].rkey);
             if (status != UCS_OK) {
                 if (perf->params.flags & UCX_PERF_TEST_FLAG_VERBOSE) {
                     ucs_fatal("ucp_rkey_unpack() failed: %s", ucs_status_string(status));
@@ -1160,7 +1317,7 @@ static ucs_status_t ucp_perf_test_setup_endpoints(ucx_perf_context_t *perf,
                 goto err_free_buffer;
             }
         } else {
-            perf->ucp.peers[i].rkey = NULL;
+            perf->ucp.peers[!group_index].rkey = NULL;
         }
     }
 

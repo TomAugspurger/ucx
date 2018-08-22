@@ -92,6 +92,12 @@ enum {
     UCT_PERF_TEST_MAX_FC_WINDOW   = 127         /* Maximal flow-control window */
 };
 
+
+typedef enum {
+    UCP_PERF_EP_REGULAR,
+    UCP_PERF_EP_SERVER_CLIENT
+} ucp_perf_ep_t;
+
 /**
  * Performance counter type.
  */
@@ -157,6 +163,8 @@ typedef struct ucx_perf_params {
     ucx_perf_wait_mode_t   wait_mode;       /* How to wait */
     uct_memory_type_t      mem_type;        /* memory type */
     unsigned               flags;           /* See ucx_perf_test_flags. */
+    ucp_perf_ep_t          ep_type;         /* regular ep or server_client ep */
+    char                   server_addr[256];/* server address */
 
     size_t                 *msg_size_list;  /* Test message sizes list. The size
                                                of the array is in msg_size_cnt */
