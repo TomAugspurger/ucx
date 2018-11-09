@@ -1147,8 +1147,11 @@ static ucs_status_t uct_ib_iface_get_numa_latency(uct_ib_iface_t *iface,
     return UCS_OK;
 }
 
+#if HAVE_CUDA
 static int uct_ib_iface_get_cuda_path(int cuda_dev, char** path)
 {
+    char* cuda_rpath = NULL;
+    char bus_path[]  = "/sys/class/pci_bus/0000:00/device";
     char bus_id[16];
     char pathname[MAXPATHSIZE];
     int i;
@@ -1159,39 +1162,42 @@ static int uct_ib_iface_get_cuda_path(int cuda_dev, char** path)
         return UCS_ERR_IO_ERROR;
     }
 
-    for (i=0; i<16; i++) bus_id[i] = tolower(bus_id[i]);
-    char bus_path[] =  "/sys/class/pci_bus/0000:00/device";
-    memcpy(bus_path+sizeof("/sys/class/pci_bus/")-1, bus_id, sizeof("0000:00")-1);
-    char* cuda_rpath = realpath(bus_path, NULL);
+    for (i = 0; i < 16; i++) {
+        bus_id[i] = tolower(bus_id[i]);
+    }
+
+    memcpy(bus_path+sizeof("/sys/class/pci_bus/")-1, bus_id,
+           sizeof("0000:00")-1);
+    cuda_rpath = realpath(bus_path, NULL);
     strncpy(pathname, cuda_rpath, MAXPATHSIZE);
     strncpy(pathname+strlen(pathname), "/", MAXPATHSIZE-strlen(pathname));
     strncpy(pathname+strlen(pathname), bus_id, MAXPATHSIZE-strlen(pathname));
-    free(cuda_rpath);
+
     *path = realpath(pathname, NULL);
     if (*path == NULL) {
         ucs_error("Could not find real path of %s", pathname);
         return UCS_ERR_IO_ERROR;
     }
+
+    free(cuda_rpath);
+
     return UCS_OK;
 }
 
 static int uct_ib_iface_get_mlx_path(const char* ib_name, char** path)
 {
     char device_path[MAXPATHSIZE];
-    snprintf(device_path, MAXPATHSIZE, "/sys/class/infiniband/%s/device", ib_name);
+
+    snprintf(device_path, MAXPATHSIZE, "/sys/class/infiniband/%s/device",
+             ib_name);
+
     *path = realpath(device_path, NULL);
     if (*path == NULL) {
         return UCS_ERR_IO_ERROR;
     }
+
     return UCS_OK;
 }
-
-enum ib_distance {
-    PATH_PIX = 0,
-    PATH_PXB = 1,
-    PATH_PHB = 2,
-    PATH_SOC = 3
-};
 
 static int uct_ib_iface_pci_distance(char* cuda_path, char* mlx_path)
 {
@@ -1199,7 +1205,8 @@ static int uct_ib_iface_pci_distance(char* cuda_path, char* mlx_path)
     int depth = 0;
     int same = 1;
     int i;
-    for (i=0; i<strlen(cuda_path); i++) {
+
+    for (i = 0; i < strlen(cuda_path); i++) {
         if (cuda_path[i] != mlx_path[i]) same = 0;
         if (cuda_path[i] == '/') {
             depth++;
@@ -1208,7 +1215,7 @@ static int uct_ib_iface_pci_distance(char* cuda_path, char* mlx_path)
     }
     if (score == 3) return PATH_SOC;
     if (score == 4) return PATH_PHB;
-    if (score == depth-1)     return PATH_PIX;
+    if (score == depth-1) return PATH_PIX;
     return PATH_PXB;
 }
 
@@ -1247,6 +1254,7 @@ static ucs_status_t uct_ib_iface_get_cuda_latency(uct_ib_iface_t *iface,
     *latency = 200e-9 * score;
     return UCS_OK;
 }
+#endif
 
 ucs_status_t uct_ib_iface_query(uct_ib_iface_t *iface, size_t xport_hdr_len,
                                 uct_iface_attr_t *iface_attr)
