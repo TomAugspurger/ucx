@@ -1,8 +1,7 @@
 /**
- * Copyright (c) 2018-2019, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  * See file LICENSE for terms.
  */
-
 #include <stdint.h>
 #include <ucp/api/ucp.h>
 #include <sys/types.h>
@@ -25,15 +24,20 @@ typedef struct ucp_py_internal_ep {
 } ucp_py_internal_ep_t;
 
 int ucp_py_init();
-int ucp_py_listen(listener_accept_cb_func, void *, int);
+void *ucp_py_listen(listener_accept_cb_func, void *, int);
+int ucp_py_stop_listener(void *);
 int ucp_py_finalize(void);
 void *ucp_py_get_ep(char *, int);
 int ucp_py_put_ep(void *);
 
-void ucp_py_worker_progress();
+int ucp_py_worker_progress();
+int ucp_py_worker_progress_wait();
+int ucp_py_worker_drain_fd();
 struct ucx_context *ucp_py_ep_send_nb(void *ep_ptr, struct data_buf *send_buf, int length);
 struct ucx_context *ucp_py_recv_nb(void *ep_ptr, struct data_buf *buf, int length);
 int ucp_py_ep_post_probe();
 int ucp_py_probe_query(void *ep_ptr);
+int ucp_py_probe_query_wo_progress(void *internal_ep);
 int ucp_py_probe_wait(void *ep_ptr);
 int ucp_py_query_request(struct ucx_context *request);
+int ucp_py_request_is_complete(struct ucx_context *request);

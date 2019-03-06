@@ -1,11 +1,12 @@
 /**
- * Copyright (c) 2018-2019, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  * See file LICENSE for terms.
  */
 #include "common.h"
 
 int set_device(int device);
 struct data_buf *populate_buffer_region(void *src);
+struct data_buf *populate_buffer_region_with_ptr(unsigned long long int);
 void *return_ptr_from_buf(struct data_buf *db);
 struct data_buf *allocate_host_buffer(int length);
 struct data_buf *allocate_cuda_buffer(int length);

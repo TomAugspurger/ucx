@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2018-2019, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  * See file LICENSE for terms.
  */
 #include "buffer_ops.h"
@@ -10,6 +10,15 @@
 #include <cuda_runtime.h>
 
 struct data_buf *populate_buffer_region(void *src)
+{
+    struct data_buf *db = NULL;
+    db = (struct data_buf *) malloc(sizeof(struct data_buf));
+    db->buf = src;
+    DEBUG_PRINT("allocated %p\n", db->buf);
+    return db;
+}
+
+struct data_buf *populate_buffer_region_with_ptr(unsigned long long int src)
 {
     struct data_buf *db = NULL;
     db = (struct data_buf *) malloc(sizeof(struct data_buf));

@@ -1,7 +1,3 @@
-/**
- * Copyright (c) 2018-2019, NVIDIA CORPORATION. All rights reserved.
- * See file LICENSE for terms.
- */
 #ifndef UCX_PY_COMMON_H
 #define UCX_PY_COMMON_H
 

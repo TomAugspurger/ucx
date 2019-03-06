@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2019, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
 # See file LICENSE for terms.
 
 import ucp_py as ucp
@@ -29,13 +29,8 @@ def allocate_mem(size, args):
             if not args.blind_recv:
                 recv_buffer_region.alloc_host(size)
     else:
-        if args.mem_type == 'cuda':
-            # Hopefully some day
-            print("cuda objects not supported yet")
-            sys.exit() 
-        else:
-            send_buffer_region = str(list(range(size)))
-            recv_buffer_region = str(list(range(size, 2 * size)))
+        send_buffer_region = str(list(range(size)))
+        recv_buffer_region = str(list(range(size, 2 * size)))
 
     return send_buffer_region, recv_buffer_region
 
@@ -139,7 +134,7 @@ def run_iters(ep, first_buffer_region, second_buffer_region, msg_log, send_first
         start = time.time()
         issue_lat = 0
         progress_lat = 0
-        
+
         if args.use_obj:
             msg_len = sys.getsizeof(str(list(range(msg_len))))
 
@@ -165,7 +160,7 @@ def run_iters(ep, first_buffer_region, second_buffer_region, msg_log, send_first
         lat = end - start
         get_avg_us = lambda x: ((x/2) / max_iters) * 1000000
         print("{}\t\t{:.2f}\t\t{:.2f}\t\t{:.2f}\t\t{:.2f}".format(msg_len, get_avg_us(lat),
-                                                                  (((msg_len * max_iters)/(lat/2)) / 10 ** 9),
+                                                                  ((msg_len/(lat/2)) / 1000000),
                                                                   get_avg_us(issue_lat),
                                                                   get_avg_us(progress_lat)))
 
@@ -190,7 +185,7 @@ async def run_iters_async(ep, first_buffer_region, second_buffer_region, msg_log
         warmup_iters = int((0.1 * max_iters))
         if args.use_obj:
             msg_len = sys.getsizeof(str(list(range(msg_len))))
-            
+
         for j in range(warmup_iters):
             first_req = await first_op(first_msg, msg_len)
             second_req = await second_op(second_msg, msg_len)
@@ -203,9 +198,9 @@ async def run_iters_async(ep, first_buffer_region, second_buffer_region, msg_log
         lat = end - start
         get_avg_us = lambda x: ((x/2) / max_iters) * 1000000
         print("{}\t\t{:.2f}\t\t{:.2f}".format(msg_len, get_avg_us(lat),
-                                              (((msg_len * max_iters)/(lat/2)) / 10 ** 9)))
+                                              ((msg_len/(lat/2)) / 1000000)))
 
-def talk_to_client(ep):
+def talk_to_client(ep, listener):
 
     global args
     global cb_not_done
@@ -217,7 +212,7 @@ def talk_to_client(ep):
 
     ucp.destroy_ep(ep)
     cb_not_done = False
-    ucp.stop_listener()
+    ucp.stop_listener(listener)
 
 def talk_to_server(ip, port):
 
@@ -232,17 +227,19 @@ def talk_to_server(ip, port):
 
     ucp.destroy_ep(ep)
 
-async def talk_to_client_async(ep):
+async def talk_to_client_async(ep, listener):
 
     global args
     send_first = True
 
     send_buffer_region, recv_buffer_region = allocate_mem((1 << max_msg_log), args)
     await run_iters_async(ep, send_buffer_region, recv_buffer_region, max_msg_log, send_first, args)
-    free_mem(send_buffer_region, recv_buffer_region, args)
+    print("past iters")
 
     ucp.destroy_ep(ep)
-    ucp.stop_listener()
+    print("past ep destroy")
+    ucp.stop_listener(listener)
+    print("past listener destroy")
 
 async def talk_to_server_async(ip, port):
 
@@ -253,9 +250,10 @@ async def talk_to_server_async(ip, port):
 
     send_buffer_region, recv_buffer_region = allocate_mem((1 << max_msg_log), args)
     await run_iters_async(ep, recv_buffer_region, send_buffer_region, max_msg_log, send_first, args)
-    free_mem(send_buffer_region, recv_buffer_region, args)
+    print("past iters")
 
     ucp.destroy_ep(ep)
+    print("past ep destroy")
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-s','--server', help='enter server ip', required=False)
@@ -285,7 +283,7 @@ if not args.use_asyncio:
     if server:
         if args.intra_node:
             ucp.set_cuda_dev(1)
-        ucp.start_listener(talk_to_client, is_coroutine = False)
+        ucp.start_listener(talk_to_client, is_coroutine=False)
         while cb_not_done:
             ucp.progress()
     else:
@@ -295,7 +293,8 @@ else:
     if server:
         if args.intra_node:
             ucp.set_cuda_dev(1)
-        coro = ucp.start_listener(talk_to_client_async, is_coroutine = True)
+        listener = ucp.start_listener(talk_to_client_async, is_coroutine=True)
+        coro = listener.coroutine
     else:
         coro = talk_to_server_async(init_str.encode(), int(args.port))
 
