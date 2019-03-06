@@ -1,0 +1,11 @@
+*.*~
+build
+ucp_py/_libs/ucp_py.c
+*.so
+ucp_py/_libs/*.a
+ucp_py/_libs/*.o
+
+dask-worker-space
+__pytestcache__
+__pycache__
+*.egg-info/
